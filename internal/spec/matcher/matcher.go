@@ -54,7 +54,21 @@ func (m *FieldMatcher) Match(field1, field2 string) float64 {
 		if len(norm2) > longer {
 			longer = len(norm2)
 		}
-		return 0.7 * float64(shorter) / float64(longer)
+
+		// Base score for substring match
+		score := 0.6
+
+		// Bonus for high overlap ratio
+		ratio := float64(shorter) / float64(longer)
+		score += 0.3 * ratio
+
+		// Bonus for prefix/suffix
+		if strings.HasPrefix(norm1, norm2) || strings.HasPrefix(norm2, norm1) ||
+			strings.HasSuffix(norm1, norm2) || strings.HasSuffix(norm2, norm1) {
+			score += 0.1
+		}
+
+		return score
 	}
 
 	// Check for common patterns (camelCase vs snake_case)

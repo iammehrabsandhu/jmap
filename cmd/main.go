@@ -94,10 +94,8 @@ func handleSuggest(inputFile, outputFile, specFile string) {
 	}
 
 	fmt.Printf("Spec generated successfully: %s\n", specFile)
-	fmt.Println("\nGenerated mappings:")
-	for i, mapping := range spec.Mappings {
-		fmt.Printf("  %d. %s -> %s (%s)\n", i+1, mapping.SourcePath, mapping.TargetPath, mapping.Transform)
-	}
+	fmt.Println("\nGenerated Spec:")
+	fmt.Println(string(specJSON))
 }
 
 func handleTransform(inputFile, specFile, outputFile string) {
