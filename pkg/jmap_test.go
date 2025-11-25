@@ -141,7 +141,9 @@ func TestSuggestSpec(t *testing.T) {
 	}
 
 	var resMap map[string]interface{}
-	json.Unmarshal([]byte(result), &resMap)
+	if err := json.Unmarshal([]byte(result), &resMap); err != nil {
+		t.Fatalf("Failed to parse transform result: %v", err)
+	}
 
 	if resMap["fullName"] != "John" {
 		t.Errorf("Expected fullName=John, got %v", resMap["fullName"])

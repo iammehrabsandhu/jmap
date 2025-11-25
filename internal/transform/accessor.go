@@ -2,7 +2,6 @@ package transform
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/iammehrabsandhu/jmap/internal/pathutil"
 )
@@ -132,25 +131,4 @@ func SetValue(data map[string]interface{}, path string, value interface{}) error
 
 	current[lastSegment.Key] = value
 	return nil
-}
-
-// pathContext builds a human-readable context string for error messages
-func pathContext(segments []pathutil.Segment, index int) string {
-	if index < 0 || index >= len(segments) {
-		return ""
-	}
-
-	var parts []string
-	for i := 0; i <= index && i < len(segments); i++ {
-		seg := segments[i]
-		if seg.IsArray {
-			if len(parts) > 0 {
-				parts[len(parts)-1] += fmt.Sprintf("[%d]", seg.Index)
-			}
-		} else {
-			parts = append(parts, seg.Key)
-		}
-	}
-
-	return strings.Join(parts, ".")
 }

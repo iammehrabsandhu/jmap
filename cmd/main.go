@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+
 	"os"
 
 	jmap "github.com/iammehrabsandhu/jmap/pkg"
@@ -30,11 +30,17 @@ func main() {
 
 	switch os.Args[1] {
 	case "suggest":
-		suggestCmd.Parse(os.Args[2:])
+		if err := suggestCmd.Parse(os.Args[2:]); err != nil {
+			fmt.Printf("Error parsing suggest flags: %v\n", err)
+			os.Exit(1)
+		}
 		handleSuggest(*suggestInput, *suggestOutput, *suggestSpecFile)
 
 	case "transform":
-		transformCmd.Parse(os.Args[2:])
+		if err := transformCmd.Parse(os.Args[2:]); err != nil {
+			fmt.Printf("Error parsing transform flags: %v\n", err)
+			os.Exit(1)
+		}
 		handleTransform(*transformInput, *transformSpec, *transformOutput)
 
 	default:
@@ -60,14 +66,14 @@ func handleSuggest(inputFile, outputFile, specFile string) {
 	}
 
 	// Read input JSON
-	inputData, err := ioutil.ReadFile(inputFile)
+	inputData, err := os.ReadFile(inputFile)
 	if err != nil {
 		fmt.Printf("Error reading input file: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Read output template JSON
-	outputData, err := ioutil.ReadFile(outputFile)
+	outputData, err := os.ReadFile(outputFile)
 	if err != nil {
 		fmt.Printf("Error reading output file: %v\n", err)
 		os.Exit(1)
@@ -87,7 +93,7 @@ func handleSuggest(inputFile, outputFile, specFile string) {
 		os.Exit(1)
 	}
 
-	err = ioutil.WriteFile(specFile, specJSON, 0644)
+	err = os.WriteFile(specFile, specJSON, 0644)
 	if err != nil {
 		fmt.Printf("Error writing spec file: %v\n", err)
 		os.Exit(1)
@@ -105,14 +111,14 @@ func handleTransform(inputFile, specFile, outputFile string) {
 	}
 
 	// Read input JSON
-	inputData, err := ioutil.ReadFile(inputFile)
+	inputData, err := os.ReadFile(inputFile)
 	if err != nil {
 		fmt.Printf("Error reading input file: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Read spec
-	specData, err := ioutil.ReadFile(specFile)
+	specData, err := os.ReadFile(specFile)
 	if err != nil {
 		fmt.Printf("Error reading spec file: %v\n", err)
 		os.Exit(1)
@@ -134,7 +140,7 @@ func handleTransform(inputFile, specFile, outputFile string) {
 
 	// Output result
 	if outputFile != "" {
-		err = ioutil.WriteFile(outputFile, []byte(result), 0644)
+		err = os.WriteFile(outputFile, []byte(result), 0644)
 		if err != nil {
 			fmt.Printf("Error writing output file: %v\n", err)
 			os.Exit(1)
