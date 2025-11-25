@@ -129,3 +129,56 @@ func IsValid(path string) bool {
 	_, err := Parse(path)
 	return err == nil
 }
+
+// GetSchemaNames extracts the field name and parent name from a path
+// It ignores array indices to return the "schema" names
+// Returns (fieldName, parentName)
+func GetSchemaNames(path string) (string, string) {
+	if path == "" {
+		return "", ""
+	}
+
+	segments, err := Parse(path)
+	if err != nil {
+		// Fallback for invalid paths: simple string manipulation
+		// This matches previous behavior but is safer
+		parts := strings.Split(path, ".")
+		if len(parts) == 0 {
+			return "", ""
+		}
+
+		field := cleanIndex(parts[len(parts)-1])
+		parent := ""
+		if len(parts) > 1 {
+			parent = cleanIndex(parts[len(parts)-2])
+		}
+		return field, parent
+	}
+
+	// Get last segment key
+	lastSeg := segments[len(segments)-1]
+	field := lastSeg.Key
+
+	// Get parent segment key
+	parent := ""
+	if len(segments) > 1 {
+		// Look for the last non-array segment before the final one
+		// Or just the previous segment's key if it exists
+		prevSeg := segments[len(segments)-2]
+		parent = prevSeg.Key
+
+		// If previous segment was just an array access (no key), go back further
+		if parent == "" && len(segments) > 2 {
+			parent = segments[len(segments)-3].Key
+		}
+	}
+
+	return field, parent
+}
+
+func cleanIndex(s string) string {
+	if idx := strings.Index(s, "["); idx != -1 {
+		return s[:idx]
+	}
+	return s
+}

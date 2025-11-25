@@ -3,8 +3,8 @@ package spec
 import (
 	"fmt"
 	"reflect"
-	"strings"
 
+	"github.com/iammehrabsandhu/jmap/internal/pathutil"
 	"github.com/iammehrabsandhu/jmap/internal/spec/matcher"
 	"github.com/iammehrabsandhu/jmap/types"
 )
@@ -68,68 +68,52 @@ func (a *Analyzer) Analyze(input, output map[string]interface{}) (*types.Transfo
 // For shift: key=sourcePath, value=targetPath
 // For default: key=targetPath, value=defaultValue
 func (a *Analyzer) addToSpec(spec map[string]interface{}, keyPath string, value interface{}) {
-	// We need to handle array indices like "orders[0].items[0].qty"
-	// and convert them to "orders" -> "*" -> "items" -> "*" -> "qty"
+	// Use pathutil to parse the path correctly
+	segments, err := pathutil.Parse(keyPath)
+	if err != nil {
+		return // Should not happen with flattened paths
+	}
 
-	// Split by dot, but we need to handle the array parts within segments
-	parts := strings.Split(keyPath, ".")
 	current := spec
 
-	for i, part := range parts {
-		// Check for array index like "orders[0]"
-		arrayIdx := -1
-		key := part
+	for i, seg := range segments {
+		// 1. Handle the key part of the segment (if any)
+		if seg.Key != "" {
+			// If this is the last segment and NOT an array access, set value
+			if i == len(segments)-1 && !seg.IsArray {
+				current[seg.Key] = value
+				return
+			}
 
-		if idxStart := strings.Index(part, "["); idxStart != -1 {
-			key = part[:idxStart]
-			arrayIdx = 0 // Just a flag that it's an array
+			// Otherwise create/traverse map
+			if _, exists := current[seg.Key]; !exists {
+				current[seg.Key] = make(map[string]interface{})
+			}
+
+			if nextMap, ok := current[seg.Key].(map[string]interface{}); ok {
+				current = nextMap
+			} else {
+				return // Conflict
+			}
 		}
 
-		// If it's an array, we need to add the key, then the wildcard
-		if arrayIdx != -1 {
-			// Add the key (e.g., "orders")
-			if _, exists := current[key]; !exists {
-				current[key] = make(map[string]interface{})
-			}
+		// 2. Handle the array part of the segment (if any)
+		if seg.IsArray {
+			// In spec generation, we replace specific indices with wildcard "*"
+			wildcard := "*"
 
-			// Move into "orders"
-			if nextMap, ok := current[key].(map[string]interface{}); ok {
-				current = nextMap
-			} else {
-				return // Conflict
-			}
-
-			// Handle the wildcard "*"
-			// If this is the last part, we set the value here
-			if i == len(parts)-1 {
-				current["*"] = value
+			// If this is the very last part of the path (e.g. "items[0]"), set value
+			if i == len(segments)-1 {
+				current[wildcard] = value
 				return
 			}
 
-			// Otherwise, ensure "*" is a map and move into it
-			if _, exists := current["*"]; !exists {
-				current["*"] = make(map[string]interface{})
+			// Otherwise create/traverse map
+			if _, exists := current[wildcard]; !exists {
+				current[wildcard] = make(map[string]interface{})
 			}
 
-			// Move into "*"
-			if nextMap, ok := current["*"].(map[string]interface{}); ok {
-				current = nextMap
-			} else {
-				return // Conflict
-			}
-		} else {
-			// Not an array part (or at least not this segment)
-			// If it's the last part and NOT an array, set the value
-			if i == len(parts)-1 {
-				current[key] = value
-				return
-			}
-
-			// Otherwise create map and traverse
-			if _, exists := current[key]; !exists {
-				current[key] = make(map[string]interface{})
-			}
-			if nextMap, ok := current[key].(map[string]interface{}); ok {
+			if nextMap, ok := current[wildcard].(map[string]interface{}); ok {
 				current = nextMap
 			} else {
 				return // Conflict
@@ -201,17 +185,15 @@ func (a *Analyzer) flattenJSON(data interface{}, prefix string) map[string]inter
 func (a *Analyzer) findBestMapping(targetPath string, targetValue interface{},
 	inputPaths map[string]interface{}) string {
 
-	// Extract field name from path
-	targetField := extractFieldName(targetPath)
-	targetParent := extractParentFieldName(targetPath)
+	// Extract field name from path using pathutil
+	targetField, targetParent := pathutil.GetSchemaNames(targetPath)
 
 	var bestPath string
 	var bestScore float64
 
 	// Search for matching fields
 	for sourcePath, sourceValue := range inputPaths {
-		sourceField := extractFieldName(sourcePath)
-		sourceParent := extractParentFieldName(sourcePath)
+		sourceField, sourceParent := pathutil.GetSchemaNames(sourcePath)
 
 		// Calculate match score
 		// 1. Leaf vs Leaf
@@ -287,63 +269,4 @@ func (a *Analyzer) findBestMapping(targetPath string, targetValue interface{},
 	}
 
 	return bestPath
-}
-
-// extractFieldName gets the last segment of a path
-func extractFieldName(path string) string {
-	// Replace array indices [0], [1], etc. with empty string to get the "schema" path
-	var cleanPath strings.Builder
-	inBracket := false
-	for _, char := range path {
-		if char == '[' {
-			inBracket = true
-			continue
-		}
-		if char == ']' {
-			inBracket = false
-			continue
-		}
-		if !inBracket {
-			cleanPath.WriteRune(char)
-		}
-	}
-
-	path = cleanPath.String()
-
-	// Get last segment
-	segments := strings.Split(path, ".")
-	if len(segments) > 0 {
-		return segments[len(segments)-1]
-	}
-
-	return path
-}
-
-// extractParentFieldName gets the second to last segment of a path
-func extractParentFieldName(path string) string {
-	// Clean array indices first
-	var cleanPath strings.Builder
-	inBracket := false
-	for _, char := range path {
-		if char == '[' {
-			inBracket = true
-			continue
-		}
-		if char == ']' {
-			inBracket = false
-			continue
-		}
-		if !inBracket {
-			cleanPath.WriteRune(char)
-		}
-	}
-
-	path = cleanPath.String()
-
-	segments := strings.Split(path, ".")
-	if len(segments) > 1 {
-		return segments[len(segments)-2]
-	}
-
-	return ""
 }

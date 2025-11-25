@@ -2,6 +2,7 @@ package transform
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/iammehrabsandhu/jmap/types"
@@ -61,10 +62,27 @@ func (e *Engine) processShift(input interface{}, spec interface{}, output map[st
 		return nil
 	}
 
-	for key, specVal := range specMap {
+	// Sort keys for determinism
+	keys := make([]string, 0, len(specMap))
+	for k := range specMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		specVal := specMap[key]
+
 		// Handle wildcard "*"
 		if key == "*" {
-			for k, v := range inputMap {
+			// Sort input keys for determinism
+			inputKeys := make([]string, 0, len(inputMap))
+			for k := range inputMap {
+				inputKeys = append(inputKeys, k)
+			}
+			sort.Strings(inputKeys)
+
+			for _, k := range inputKeys {
+				v := inputMap[k]
 				if err := e.processField(v, k, specVal, output); err != nil {
 					return err
 				}
@@ -124,13 +142,27 @@ func (e *Engine) placeValue(output map[string]interface{}, path string, val inte
 		path = strings.ReplaceAll(path, "&", key)
 	}
 
-	// Simple path setting for now (dot notation)
-	// TODO: Support array creation []
-	parts := strings.Split(path, ".")
+	// Optimized path traversal without strings.Split
 	current := output
+	start := 0
+	pathLen := len(path)
 
-	for i, part := range parts {
-		if i == len(parts)-1 {
+	for start < pathLen {
+		end := strings.IndexByte(path[start:], '.')
+		var part string
+		var isLast bool
+
+		if end == -1 {
+			part = path[start:]
+			start = pathLen
+			isLast = true
+		} else {
+			part = path[start : start+end]
+			start += end + 1
+			isLast = false
+		}
+
+		if isLast {
 			// Leaf node
 			// If key already exists, turn it into an array (list behavior)
 			if existing, exists := current[part]; exists {
@@ -151,8 +183,7 @@ func (e *Engine) placeValue(output map[string]interface{}, path string, val inte
 				current = nextMap
 			} else {
 				// Conflict: trying to traverse into a non-map
-				// For now, just overwrite or ignore (Jolt behavior is complex here)
-				// Let's overwrite with a map to continue
+				// Overwrite with a map to continue
 				newMap := make(map[string]interface{})
 				current[part] = newMap
 				current = newMap
@@ -173,7 +204,15 @@ func (e *Engine) applyDefault(input interface{}, spec interface{}) (interface{},
 		return input, nil
 	}
 
-	for key, defaultVal := range specMap {
+	// Sort keys for determinism
+	keys := make([]string, 0, len(specMap))
+	for k := range specMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		defaultVal := specMap[key]
 		if _, exists := inputMap[key]; !exists {
 			inputMap[key] = defaultVal
 		} else if nestedSpec, ok := defaultVal.(map[string]interface{}); ok {
