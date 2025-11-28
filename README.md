@@ -41,7 +41,7 @@ jmap/                           # Root repository
 ## Installation
 
 ```bash
-go get github.com/yourusername/jmap/pkg
+go get github.com/iammehrabsandhu/jmap/pkg
 ```
 
 ## Quick Start
@@ -53,7 +53,7 @@ package main
 
 import (
     "fmt"
-    "github.com/yourusername/jmap/pkg"
+    "github.com/iammehrabsandhu/jmap/pkg"
 )
 
 func main() {

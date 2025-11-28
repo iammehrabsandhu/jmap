@@ -144,7 +144,7 @@ func main() {
 
 			// -----------------------------------------------------------------
 			// NOTE: JMap currently does **not** have an expression engine, so the
-			//       `total` field (sum of qty*price) and the combined [Name](cci:1://file:///Users/sator01/Documents/projects/jmap/internal/spec/analyzer.go:190:0-202:1)
+			//       `total` field (sum of qty*price) and the combined
 			//       (firstName + " " + lastName) must be derived in Go after the
 			//       shift step.  No `default` operation is required because every
 			//       target field is produced by the shift.
@@ -154,7 +154,7 @@ func main() {
 
 	spec1, err := jmap.SuggestSpec(inputJSON, outputJSON)
 	if err != nil {
-		log.Fatal(spec)
+		log.Fatal(err)
 	}
 
 	specJSON, _ := json.MarshalIndent(spec1, "", "  ")
