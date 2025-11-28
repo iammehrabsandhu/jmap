@@ -6,7 +6,6 @@ import (
 	"log"
 
 	jmap "github.com/iammehrabsandhu/jmap/pkg"
-	"github.com/iammehrabsandhu/jmap/types"
 )
 
 func main() {
@@ -92,65 +91,65 @@ func main() {
 }
 `
 
-	spec := &types.TransformSpec{
-		Operations: []types.Operation{
-			{
-				// ---- SHIFT -------------------------------------------------
-				Type: "shift",
-				Spec: map[string]interface{}{
-					// ── orders ───────────────────────────────────────
-					"orders": map[string]interface{}{
-						// “*” iterates over every element of the orders array.
-						"*": map[string]interface{}{
-							// orderId ← orders[i].id
-							"id": "orderId",
+	// spec := &types.TransformSpec{
+	// 	Operations: []types.Operation{
+	// 		{
+	// 			// ---- SHIFT -------------------------------------------------
+	// 			Type: "shift",
+	// 			Spec: map[string]interface{}{
+	// 				// ── orders ───────────────────────────────────────
+	// 				"orders": map[string]interface{}{
+	// 					// “*” iterates over every element of the orders array.
+	// 					"*": map[string]interface{}{
+	// 						// orderId ← orders[i].id
+	// 						"id": "orderId",
 
-							// ── customer ─────────────────────────────
-							"customer": map[string]interface{}{
-								// We expose the two name parts separately – they can be
-								// concatenated later in Go (jmap has no built‑in concat).
-								"firstName": "firstName",
-								"lastName":  "lastName",
+	// 						// ── customer ─────────────────────────────
+	// 						"customer": map[string]interface{}{
+	// 							// We expose the two name parts separately – they can be
+	// 							// concatenated later in Go (jmap has no built‑in concat).
+	// 							"firstName": "firstName",
+	// 							"lastName":  "lastName",
 
-								// city ← orders[i].customer.address.city
-								"address": map[string]interface{}{
-									"city": "city",
-								},
-							},
+	// 							// city ← orders[i].customer.address.city
+	// 							"address": map[string]interface{}{
+	// 								"city": "city",
+	// 							},
+	// 						},
 
-							// ── items (used only to collect qty/price) ─────
-							"items": map[string]interface{}{
-								"*": map[string]interface{}{
-									// Store each qty / price in a temporary array.
-									// These helpers will be removed (or used for a post‑step
-									// calculation) after the shift.
-									"qty":   "tmpQty[]",
-									"price": "tmpPrice[]",
-								},
-							},
+	// 						// ── items (used only to collect qty/price) ─────
+	// 						"items": map[string]interface{}{
+	// 							"*": map[string]interface{}{
+	// 								// Store each qty / price in a temporary array.
+	// 								// These helpers will be removed (or used for a post‑step
+	// 								// calculation) after the shift.
+	// 								"qty":   "tmpQty[]",
+	// 								"price": "tmpPrice[]",
+	// 							},
+	// 						},
 
-							// status ← orders[i].status
-							"status": "status",
-						},
-					},
+	// 						// status ← orders[i].status
+	// 						"status": "status",
+	// 					},
+	// 				},
 
-					// ── metadata ───────────────────────────────────────
-					"metadata": map[string]interface{}{
-						// generatedAt is copied unchanged.
-						"generatedAt": "generatedAt",
-					},
-				},
-			},
+	// 				// ── metadata ───────────────────────────────────────
+	// 				"metadata": map[string]interface{}{
+	// 					// generatedAt is copied unchanged.
+	// 					"generatedAt": "generatedAt",
+	// 				},
+	// 			},
+	// 		},
 
-			// -----------------------------------------------------------------
-			// NOTE: JMap currently does **not** have an expression engine, so the
-			//       `total` field (sum of qty*price) and the combined
-			//       (firstName + " " + lastName) must be derived in Go after the
-			//       shift step.  No `default` operation is required because every
-			//       target field is produced by the shift.
-			// -----------------------------------------------------------------
-		},
-	}
+	// 		// -----------------------------------------------------------------
+	// 		// NOTE: JMap currently does **not** have an expression engine, so the
+	// 		//       `total` field (sum of qty*price) and the combined
+	// 		//       (firstName + " " + lastName) must be derived in Go after the
+	// 		//       shift step.  No `default` operation is required because every
+	// 		//       target field is produced by the shift.
+	// 		// -----------------------------------------------------------------
+	// 	},
+	// }
 
 	spec1, err := jmap.SuggestSpec(inputJSON, outputJSON)
 	if err != nil {
