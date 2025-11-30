@@ -4,13 +4,12 @@ A powerful, flexible Go library for transforming JSON structures using declarati
 
 ## Features
 
+- **Spec generation** - Automatically suggest transformation specs from examples
 - **Dynamic transformation** - No hardcoded mappings, everything driven by specs
 - **Nested JSON support** - Handle deeply nested objects and arrays
-- **Spec generation** - Automatically suggest transformation specs from examples
 - **Multiple transform types** - Direct mapping, array handling, constants, and more
 - **Default values** - Fallback values for missing fields
 - **CLI tool** - Command-line interface for quick transformations
-- **Industry-standard structure** - Follows Go project layout best practices
 
 ## Project Structure
 
