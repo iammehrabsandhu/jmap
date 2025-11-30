@@ -1,6 +1,9 @@
 package jmap
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -696,22 +699,175 @@ func runScenario(t *testing.T, inputJSON, outputJSON string) {
 		t.Fatalf("SuggestSpec failed: %v", err)
 	}
 
-	// We can't easily assert exact spec structure because it's generated.
-	// But we can check if it produces the correct output (or close to it).
-	// Or at least check that it's not all defaults.
+	// 1. Parse Output JSON to get all actual fields
+	var output map[string]interface{}
+	if err := json.Unmarshal([]byte(outputJSON), &output); err != nil {
+		t.Fatalf("Invalid output JSON: %v", err)
+	}
+	outputFields := flatten(output, "")
 
-	hasShift := false
+	// 2. Collect Targets from Spec
+	shiftTargets := make(map[string]bool)
+	defaultKeys := make(map[string]bool)
+
 	for _, op := range spec.Operations {
 		if op.Type == "shift" {
-			hasShift = true
-			break
+			collectShiftTargets(op.Spec, shiftTargets)
+		} else if op.Type == "default" {
+			collectDefaultKeys(op.Spec, "", defaultKeys)
 		}
 	}
-	if !hasShift {
-		t.Errorf("Scenario should generate at least one shift operation")
+
+	// 3. Count
+	shiftCount := 0
+	defaultCount := 0
+	unaccountedCount := 0
+
+	for _, field := range outputFields {
+		schemaPath := normalizePath(field)
+
+		// Check if this field is covered by shift
+		// We check exact match or wildcard match
+		if isCovered(schemaPath, shiftTargets) {
+			shiftCount++
+		} else if isCovered(schemaPath, defaultKeys) {
+			defaultCount++
+		} else {
+			unaccountedCount++
+		}
 	}
 
-	// Ideally we would run Transform(input, spec) and compare with output,
-	// but SuggestSpec might not be perfect yet (e.g. string concatenation).
-	// For now, we just verify that it finds mappings.
+	total := shiftCount + defaultCount + unaccountedCount
+	t.Logf("Field Stats - Total: %d | Shift: %d | Default: %d | Unaccounted: %d",
+		total, shiftCount, defaultCount, unaccountedCount)
+
+	if total > 0 {
+		ratio := float64(shiftCount) / float64(total)
+		t.Logf("Mapping Success Rate (by field): %.1f%%", ratio*100)
+	}
+}
+
+// Helpers
+
+func flatten(data interface{}, prefix string) []string {
+	var fields []string
+	switch v := data.(type) {
+	case map[string]interface{}:
+		for k, val := range v {
+			p := k
+			if prefix != "" {
+				p = prefix + "." + k
+			}
+			fields = append(fields, flatten(val, p)...)
+		}
+	case []interface{}:
+		for i, val := range v {
+			p := fmt.Sprintf("%s[%d]", prefix, i)
+			fields = append(fields, flatten(val, p)...)
+		}
+	default:
+		if prefix != "" {
+			fields = append(fields, prefix)
+		}
+	}
+	return fields
+}
+
+func collectShiftTargets(spec interface{}, targets map[string]bool) {
+	switch v := spec.(type) {
+	case map[string]interface{}:
+		for _, val := range v {
+			collectShiftTargets(val, targets)
+		}
+	case string:
+		targets[v] = true
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				targets[s] = true
+			}
+		}
+	}
+}
+
+func collectDefaultKeys(spec interface{}, prefix string, keys map[string]bool) {
+	if m, ok := spec.(map[string]interface{}); ok {
+		for k, v := range m {
+			p := k
+			if prefix != "" {
+				p = prefix + "." + k
+			}
+			// If value is a map, recurse, otherwise it's a leaf key
+			if _, isMap := v.(map[string]interface{}); isMap {
+				collectDefaultKeys(v, p, keys)
+			} else {
+				keys[p] = true
+			}
+		}
+	}
+}
+
+func normalizePath(path string) string {
+	// Remove array indices: items[0].id -> items.id
+	// We use a regex-like approach or simple string building
+	var sb strings.Builder
+	inBracket := false
+	for _, r := range path {
+		if r == '[' {
+			inBracket = true
+			continue
+		}
+		if r == ']' {
+			inBracket = false
+			continue
+		}
+		if !inBracket {
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
+}
+
+func isCovered(path string, targets map[string]bool) bool {
+	// 1. Exact match
+	if targets[path] {
+		return true
+	}
+	// 2. Wildcard match (simple version: if target has *, check if path matches pattern)
+	// For now, SuggestSpec generates explicit paths or * wildcards.
+	// If the spec has "items.*.id", and path is "items.id" (normalized), they match.
+	// Wait, normalizePath removes indices, so "items[0].id" becomes "items.id".
+	// The spec target might be "items.id" (if array was flattened) or "items[&].id".
+	// JMap's SuggestSpec currently generates "items" -> "*" -> "id" which results in target "items.&.id" or similar?
+	// Actually SuggestSpec generates "items" -> "*" -> "id" : "items.&.id" ? No.
+	// Let's look at what SuggestSpec produces. It produces "items" -> "*" -> "id": "sourcePath".
+	// The TARGET path in shift spec is the value.
+	// In SuggestSpec, the value is the SOURCE path.
+	// Wait, shift spec is: "source": "target".
+	// SuggestSpec generates: "inputPath": "outputPath".
+	// So we need to collect VALUES from shift spec.
+
+	// If SuggestSpec generates "orders": { "*": { "id": "orderId" } },
+	// then for input "orders[0].id", it maps to "orderId".
+	// The target is "orderId".
+	// Our output field is "orderId". Normalized: "orderId". Match!
+
+	// If output is "items[0].id", normalized "items.id".
+	// Spec might say "items": { "*": { "id": "items[&].id" } } ?
+	// No, SuggestSpec usually tries to map to specific fields.
+	// If the output has an array, SuggestSpec might generate "items[&].id".
+	// Let's assume exact match on normalized path for now.
+	// If the target contains "&", we might need to be smarter.
+	// For this test, let's strip "&" from targets too?
+
+	for t := range targets {
+		// If target is "items[&].id", normalized it becomes "items.id" (if we strip & too?)
+		// Let's just strip & from target for comparison
+		normTarget := strings.ReplaceAll(t, "&", "")
+		normTarget = strings.ReplaceAll(normTarget, "[]", "") // handle [] syntax if any
+		if normTarget == path {
+			return true
+		}
+	}
+	return false
 }

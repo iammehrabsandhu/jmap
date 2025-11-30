@@ -243,7 +243,6 @@ func (a *Analyzer) findBestMapping(targetPath string, targetValue interface{},
 				}
 
 				if !isSimple {
-					// Boost score significantly
 					if score < 0.9 {
 						score = 0.9
 					}

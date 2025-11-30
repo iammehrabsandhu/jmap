@@ -11,7 +11,6 @@ import (
 // Engine handles JSON transformation operations
 type Engine struct{}
 
-// NewEngine creates a new transformation engine
 func NewEngine() *Engine {
 	return &Engine{}
 }
@@ -39,7 +38,6 @@ func (e *Engine) Transform(input interface{}, spec *types.TransformSpec) (interf
 	return current, nil
 }
 
-// applyShift executes the shift transformation
 func (e *Engine) applyShift(input interface{}, spec interface{}) (interface{}, error) {
 	output := make(map[string]interface{})
 	if err := e.processShift(input, spec, output); err != nil {
@@ -72,7 +70,6 @@ func (e *Engine) processShift(input interface{}, spec interface{}, output map[st
 	for _, key := range keys {
 		specVal := specMap[key]
 
-		// Handle wildcard "*"
 		if key == "*" {
 			// Sort input keys for determinism
 			inputKeys := make([]string, 0, len(inputMap))
