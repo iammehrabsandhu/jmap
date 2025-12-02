@@ -9,7 +9,6 @@ Go library for transforming JSON structures using declarative specifications. Su
 - **Nested JSON support** - Handle deeply nested objects and arrays
 - **Default values** - Fallback values for missing fields
 - **CLI tool** - Command-line interface for quick transformations
-- **Industry-standard structure** - Follows Go project layout best practices
 
 ## Project Structure
 
