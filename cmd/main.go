@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-
 	"os"
 
 	jmap "github.com/iammehrabsandhu/jmap/pkg"
@@ -12,7 +11,7 @@ import (
 )
 
 func main() {
-	// Define command-line flags
+	// Flags.
 	suggestCmd := flag.NewFlagSet("suggest", flag.ExitOnError)
 	suggestInput := suggestCmd.String("input", "", "Input JSON file")
 	suggestOutput := suggestCmd.String("output", "", "Output JSON file (template)")
@@ -65,28 +64,28 @@ func handleSuggest(inputFile, outputFile, specFile string) {
 		os.Exit(1)
 	}
 
-	// Read input JSON
+	// Read input.
 	inputData, err := os.ReadFile(inputFile)
 	if err != nil {
 		fmt.Printf("Error reading input file: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Read output template JSON
+	// Read output template.
 	outputData, err := os.ReadFile(outputFile)
 	if err != nil {
 		fmt.Printf("Error reading output file: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Generate spec
+	// Generate spec.
 	spec, err := jmap.SuggestSpec(string(inputData), string(outputData))
 	if err != nil {
 		fmt.Printf("Error generating spec: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Write spec to file
+	// Save spec.
 	specJSON, err := json.MarshalIndent(spec, "", "  ")
 	if err != nil {
 		fmt.Printf("Error marshaling spec: %v\n", err)
@@ -110,14 +109,14 @@ func handleTransform(inputFile, specFile, outputFile string) {
 		os.Exit(1)
 	}
 
-	// Read input JSON
+	// Read input.
 	inputData, err := os.ReadFile(inputFile)
 	if err != nil {
 		fmt.Printf("Error reading input file: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Read spec
+	// Read spec.
 	specData, err := os.ReadFile(specFile)
 	if err != nil {
 		fmt.Printf("Error reading spec file: %v\n", err)
@@ -131,14 +130,14 @@ func handleTransform(inputFile, specFile, outputFile string) {
 		os.Exit(1)
 	}
 
-	// Transform
+	// Transform.
 	result, err := jmap.Transform(string(inputData), &spec)
 	if err != nil {
 		fmt.Printf("Error transforming JSON: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Output result
+	// Output.
 	if outputFile != "" {
 		err = os.WriteFile(outputFile, []byte(result), 0644)
 		if err != nil {

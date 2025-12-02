@@ -3,19 +3,20 @@ package transform
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/iammehrabsandhu/jmap/types"
 )
 
-// Engine handles JSON transformation operations
+// Engine runs the show.
 type Engine struct{}
 
 func NewEngine() *Engine {
 	return &Engine{}
 }
 
-// Transform applies the transformation spec to the input
+// Transform applies the spec to input.
 func (e *Engine) Transform(input interface{}, spec *types.TransformSpec) (interface{}, error) {
 	current := input
 	var err error
@@ -49,18 +50,17 @@ func (e *Engine) applyShift(input interface{}, spec interface{}) (interface{}, e
 func (e *Engine) processShift(input interface{}, spec interface{}, output map[string]interface{}) error {
 	specMap, ok := spec.(map[string]interface{})
 	if !ok {
-		// If spec is not a map, it might be a direct mapping (string) or list of strings
-		// But at the top level of a shift spec, it usually expects a map matching input structure
+		// Spec needs to be a map at the top level.
 		return fmt.Errorf("invalid shift spec: expected map, got %T", spec)
 	}
 
 	inputMap, ok := input.(map[string]interface{})
 	if !ok {
-		// If input is not a map, we can't traverse it with a map spec
+		// Input not a map? Can't traverse.
 		return nil
 	}
 
-	// Sort keys for determinism
+	// Sort keys for deterministic output.
 	keys := make([]string, 0, len(specMap))
 	for k := range specMap {
 		keys = append(keys, k)
@@ -71,7 +71,7 @@ func (e *Engine) processShift(input interface{}, spec interface{}, output map[st
 		specVal := specMap[key]
 
 		if key == "*" {
-			// Sort input keys for determinism
+			// Sort input keys too.
 			inputKeys := make([]string, 0, len(inputMap))
 			for k := range inputMap {
 				inputKeys = append(inputKeys, k)
@@ -87,7 +87,7 @@ func (e *Engine) processShift(input interface{}, spec interface{}, output map[st
 			continue
 		}
 
-		// Handle exact match
+		// Exact match.
 		if val, exists := inputMap[key]; exists {
 			if err := e.processField(val, key, specVal, output); err != nil {
 				return err
@@ -101,30 +101,38 @@ func (e *Engine) processShift(input interface{}, spec interface{}, output map[st
 func (e *Engine) processField(val interface{}, key string, specVal interface{}, output map[string]interface{}) error {
 	switch s := specVal.(type) {
 	case string:
-		// Direct mapping: "targetPath"
+		// Direct mapping.
 		e.placeValue(output, s, val, key)
 	case []interface{}:
-		// Multiple mappings: ["target1", "target2"]
+		// Multiple mappings.
 		for _, item := range s {
 			if str, ok := item.(string); ok {
 				e.placeValue(output, str, val, key)
 			}
 		}
 	case map[string]interface{}:
-		// Nested spec
 		if nestedMap, ok := val.(map[string]interface{}); ok {
 			if err := e.processShift(nestedMap, s, output); err != nil {
 				return err
 			}
 		} else if nestedArr, ok := val.([]interface{}); ok {
-			// Handle array input with nested spec
-			// Jolt typically handles arrays by iterating if the spec has "*" or indices
-			// For simplicity, let's assume "*" in spec matches array indices
-			if subSpec, ok := s["*"]; ok {
-				for i, item := range nestedArr {
-					// We pass the index as the "key" for & logic
-					if err := e.processField(item, fmt.Sprintf("%d", i), subSpec, output); err != nil {
-						return err
+			// Array input? Iterate spec for "*" or indices.
+			for k, v := range s {
+				if k == "*" {
+					// Wildcard: all items.
+					for i, item := range nestedArr {
+						if err := e.processField(item, fmt.Sprintf("%d", i), v, output); err != nil {
+							return err
+						}
+					}
+				} else {
+					// Specific index.
+					if idx, err := strconv.Atoi(k); err == nil {
+						if idx >= 0 && idx < len(nestedArr) {
+							if err := e.processField(nestedArr[idx], k, v, output); err != nil {
+								return err
+							}
+						}
 					}
 				}
 			}
@@ -134,12 +142,12 @@ func (e *Engine) processField(val interface{}, key string, specVal interface{}, 
 }
 
 func (e *Engine) placeValue(output map[string]interface{}, path string, val interface{}, key string) {
-	// Handle "&" lookup (use the key as part of the path)
+	// Handle "&" lookup.
 	if strings.Contains(path, "&") {
 		path = strings.ReplaceAll(path, "&", key)
 	}
 
-	// Optimized path traversal without strings.Split
+	// Fast path traversal.
 	current := output
 	start := 0
 	pathLen := len(path)
@@ -160,8 +168,8 @@ func (e *Engine) placeValue(output map[string]interface{}, path string, val inte
 		}
 
 		if isLast {
-			// Leaf node
-			// If key already exists, turn it into an array (list behavior)
+			// Leaf node.
+			// Key exists? Make it a list.
 			if existing, exists := current[part]; exists {
 				if arr, ok := existing.([]interface{}); ok {
 					current[part] = append(arr, val)
@@ -172,15 +180,14 @@ func (e *Engine) placeValue(output map[string]interface{}, path string, val inte
 				current[part] = val
 			}
 		} else {
-			// Intermediate node
+			// Intermediate node.
 			if _, exists := current[part]; !exists {
 				current[part] = make(map[string]interface{})
 			}
 			if nextMap, ok := current[part].(map[string]interface{}); ok {
 				current = nextMap
 			} else {
-				// Conflict: trying to traverse into a non-map
-				// Overwrite with a map to continue
+				// Conflict? Overwrite with map.
 				newMap := make(map[string]interface{})
 				current[part] = newMap
 				current = newMap
@@ -189,7 +196,7 @@ func (e *Engine) placeValue(output map[string]interface{}, path string, val inte
 	}
 }
 
-// applyDefault applies default values to missing fields
+// applyDefault fills missing fields.
 func (e *Engine) applyDefault(input interface{}, spec interface{}) (interface{}, error) {
 	specMap, ok := spec.(map[string]interface{})
 	if !ok {
@@ -201,7 +208,7 @@ func (e *Engine) applyDefault(input interface{}, spec interface{}) (interface{},
 		return input, nil
 	}
 
-	// Sort keys for determinism
+	// Sort keys.
 	keys := make([]string, 0, len(specMap))
 	for k := range specMap {
 		keys = append(keys, k)
@@ -213,7 +220,7 @@ func (e *Engine) applyDefault(input interface{}, spec interface{}) (interface{},
 		if _, exists := inputMap[key]; !exists {
 			inputMap[key] = defaultVal
 		} else if nestedSpec, ok := defaultVal.(map[string]interface{}); ok {
-			// Recursive default
+			// Recurse.
 			if nestedInput, ok := inputMap[key].(map[string]interface{}); ok {
 				res, _ := e.applyDefault(nestedInput, nestedSpec)
 				inputMap[key] = res

@@ -149,3 +149,43 @@ func TestSuggestSpec(t *testing.T) {
 		t.Errorf("Expected fullName=John, got %v", resMap["fullName"])
 	}
 }
+
+func TestArrayIndexSupport(t *testing.T) {
+	input := `{
+		"items": ["a", "b", "c"]
+	}`
+	// Map index 0 to "first", index 2 to "third"
+	spec := &types.TransformSpec{
+		Operations: []types.Operation{
+			{
+				Type: "shift",
+				Spec: map[string]interface{}{
+					"items": map[string]interface{}{
+						"0": "first",
+						"2": "third",
+					},
+				},
+			},
+		},
+	}
+
+	result, err := jmap.Transform(input, spec)
+	if err != nil {
+		t.Fatalf("Transform failed: %v", err)
+	}
+
+	var output map[string]interface{}
+	if err := json.Unmarshal([]byte(result), &output); err != nil {
+		t.Fatalf("Failed to parse result: %v", err)
+	}
+
+	if output["first"] != "a" {
+		t.Errorf("Expected first='a', got %v", output["first"])
+	}
+	if output["third"] != "c" {
+		t.Errorf("Expected third='c', got %v", output["third"])
+	}
+	if _, ok := output["second"]; ok {
+		t.Errorf("Did not expect 'second' key")
+	}
+}
