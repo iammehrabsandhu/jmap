@@ -104,9 +104,10 @@ func TestComplexRepro(t *testing.T) {
 	defaultKeys := make(map[string]bool)
 
 	for _, op := range spec.Operations {
-		if op.Type == "shift" {
+		switch op.Type {
+		case "shift":
 			collectShiftTargets(op.Spec, shiftTargets)
-		} else if op.Type == "default" {
+		case "default":
 			collectDefaultKeys(op.Spec, "", defaultKeys)
 		}
 	}

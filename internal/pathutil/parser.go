@@ -147,7 +147,7 @@ func GetSchemaNames(path string) (string, string) {
 
 	// Find last non-array segment for field.
 	var field string
-	var fieldIdx int = -1
+	var fieldIdx = -1
 	for i := len(segments) - 1; i >= 0; i-- {
 		if !segments[i].IsArray {
 			field = segments[i].Key
