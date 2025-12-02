@@ -9,7 +9,6 @@ import (
 	"github.com/iammehrabsandhu/jmap/types"
 )
 
-// Transform applies the transformation spec to input JSON and returns transformed JSON
 func Transform(inputJSON string, spec *types.TransformSpec) (string, error) {
 	if spec == nil {
 		return "", fmt.Errorf("transform spec cannot be nil")
@@ -34,8 +33,6 @@ func Transform(inputJSON string, spec *types.TransformSpec) (string, error) {
 	return string(result), nil
 }
 
-// SuggestSpec analyzes input and output JSON to suggest a transformation spec
-// This is useful for generating an initial spec that can be refined manually
 func SuggestSpec(inputJSON, outputJSON string) (*types.TransformSpec, error) {
 	var input, output map[string]interface{}
 

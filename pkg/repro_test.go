@@ -1,6 +1,8 @@
 package jmap
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -83,45 +85,65 @@ func TestComplexRepro(t *testing.T) {
 }`
 
 	spec, err := SuggestSpec(inputJSON, outputJSON)
+	fmt.Println()
+	fmt.Println(spec)
+	fmt.Println()
 	if err != nil {
 		t.Fatalf("SuggestSpec failed: %v", err)
 	}
 
-	// We expect "facility" to be shifted, not defaulted.
-	// Check if "facility" appears in the shift spec.
-
-	// Helper to check if a key exists deeply in the map
-	var findKey func(m map[string]interface{}, key string) bool
-	findKey = func(m map[string]interface{}, key string) bool {
-		for k, v := range m {
-			if k == key {
-				return true
-			}
-			if nested, ok := v.(map[string]interface{}); ok {
-				if findKey(nested, key) {
-					return true
-				}
-			}
-		}
-		return false
+	// 1. Parse Output JSON to get all actual fields
+	var output map[string]interface{}
+	if err := json.Unmarshal([]byte(outputJSON), &output); err != nil {
+		t.Fatalf("Invalid output JSON: %v", err)
 	}
+	outputFields := flatten(output, "")
 
-	hasShift := false
+	// 2. Collect Targets from Spec
+	shiftTargets := make(map[string]bool)
+	defaultKeys := make(map[string]bool)
+
 	for _, op := range spec.Operations {
-		if op.Type == "shift" {
-			if specMap, ok := op.Spec.(map[string]interface{}); ok {
-				// We want to see if "facility" from input is being mapped.
-				// Input path has "facility".
-				// The shift spec keys should reflect input structure.
-				// So we look for "facility" key in the spec.
-				if findKey(specMap, "facility") {
-					hasShift = true
-				}
-			}
+		switch op.Type {
+		case "shift":
+			collectShiftTargets(op.Spec, shiftTargets)
+		case "default":
+			collectDefaultKeys(op.Spec, "", defaultKeys)
 		}
 	}
 
-	if !hasShift {
-		t.Errorf("Expected 'facility' to be in shift spec, but it likely fell back to default")
+	// 3. Count
+	shiftCount := 0
+	defaultCount := 0
+	unaccountedCount := 0
+
+	for _, field := range outputFields {
+		schemaPath := normalizePath(field)
+
+		if isCovered(schemaPath, shiftTargets) {
+			shiftCount++
+		} else if isCovered(schemaPath, defaultKeys) {
+			defaultCount++
+		} else {
+			unaccountedCount++
+		}
+	}
+
+	total := shiftCount + defaultCount + unaccountedCount
+	t.Logf("Field Stats - Total: %d | Shift: %d | Default: %d | Unaccounted: %d",
+		total, shiftCount, defaultCount, unaccountedCount)
+
+	if total > 0 {
+		ratio := float64(shiftCount) / float64(total)
+		t.Logf("Mapping Success Rate (by field): %.1f%%", ratio*100)
+	}
+
+	// Original assertion logic (adapted)
+	// We expect "permissions.dimensions.facility.value" to be shifted
+	// Normalized path: "permissions.dimensions.facility.value"
+	// Check if it's in shiftTargets
+	targetPath := "permissions.dimensions.facility.value"
+	if !isCovered(targetPath, shiftTargets) {
+		t.Errorf("Expected '%s' to be in shift spec, but it was not found in targets", targetPath)
 	}
 }

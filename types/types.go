@@ -1,17 +1,15 @@
 package types
 
-// TransformSpec defines the complete transformation specification
-// It is a list of operations to be applied in order
+// TransformSpec is a list of ops.
 type TransformSpec struct {
 	Operations []Operation `json:"operations"`
 }
 
-// Operation defines a single transformation step
+// Operation is one step.
 type Operation struct {
-	// Type of operation: "shift", "default", "remove", "sort", "cardinality", "modify-overwrite-beta"
+	// Type: "shift", "default"
 	Type string `json:"type"`
 
-	// Spec is the configuration for this operation
-	// For "shift", it's a map defining the mapping
+	// Spec config.
 	Spec interface{} `json:"spec"`
 }

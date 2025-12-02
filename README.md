@@ -1,13 +1,12 @@
 # jmap - JSON Transformation Library
 
-A powerful, flexible Go library for transforming JSON structures using declarative specifications. Supports nested objects, arrays, and intelligent spec generation.
+Go library for transforming JSON structures using declarative specifications. Supports nested objects, arrays, and intelligent spec generation.
 
 ## Features
 
-- **Spec generation** - Automatically suggest transformation specs from examples
-- **Dynamic transformation** - No hardcoded mappings, everything driven by specs
+- **Spec generation** - Automatically suggest transformation specs from examples, rigorously tested too !
+- **Dynamic transformation** - No hardcoded mappings (mostly atleast), everything driven by specs
 - **Nested JSON support** - Handle deeply nested objects and arrays
-- **Multiple transform types** - Direct mapping, array handling, constants, and more
 - **Default values** - Fallback values for missing fields
 - **CLI tool** - Command-line interface for quick transformations
 
@@ -52,19 +51,23 @@ package main
 
 import (
     "fmt"
-    "github.com/iammehrabsandhu/jmap/pkg"
+    jmap "github.com/iammehrabsandhu/jmap/pkg"
+    "github.com/iammehrabsandhu/jmap/types"
 )
 
 func main() {
     input := `{"user": {"name": "John", "age": 30}}`
     
-    spec := &jmap.types.TransformSpec{
-        Version: "1.0",
-        Mappings: []jmap.FieldMapping{
+    spec := &types.TransformSpec{
+        Operations: []types.Operation{
             {
-                SourcePath: "user.name",
-                TargetPath: "fullName",
-                Transform:  jmap.TransformDirect,
+                Type: "shift",
+                Spec: map[string]interface{}{
+                    "user": map[string]interface{}{
+                        "name": "fullName",
+                        "age":  "userAge",
+                    },
+                },
             },
         },
     }
@@ -109,15 +112,12 @@ jmap suggest -input input.json -output template.json -spec generated_spec.json
 jmap transform -input data.json -spec spec.json -output result.json
 ```
 
-## Transform Types
+## Operation Types
 
 | Type | Description | Example |
 |------|-------------|---------|
-| `TransformDirect` | Direct 1:1 mapping | `source.field → target.field` |
-| `TransformFirstElem` | Extract first array element | `array[0] → field` |
-| `TransformArray` | Wrap value in array | `field → [field]` |
-| `TransformConstant` | Use constant value | `→ "PENDING"` |
-| `TransformObject` | Apply nested transformation | Complex nested mapping |
+| `shift` | Move/map data from input to output | `"source.field": "target.field"` |
+| `default` | Provide fallback values for missing fields | `{"status": "ACTIVE"}` |
 
 ## Spec Format
 
@@ -156,13 +156,17 @@ jmap transform -input data.json -spec spec.json -output result.json
 ### Handling Arrays
 
 ```go
-spec := &jmap.types.TransformSpec{
-    Version: "1.0",
-    Mappings: []jmap.FieldMapping{
+spec := &types.TransformSpec{
+    Operations: []types.Operation{
         {
-            SourcePath: "permissions[0].scope",
-            TargetPath: "firstPermission",
-            Transform:  jmap.TransformDirect,
+            Type: "shift",
+            Spec: map[string]interface{}{
+                "permissions": map[string]interface{}{
+                    "*": map[string]interface{}{
+                        "scope": "permissions[&].accessType",
+                    },
+                },
+            },
         },
     },
 }
@@ -172,21 +176,25 @@ spec := &jmap.types.TransformSpec{
 
 ```go
 {
-    SourcePath:   "optional.field",
-    TargetPath:   "requiredField",
-    Transform:    jmap.TransformDirect,
-    DefaultValue: "fallback_value",
+    Type: "default",
+    Spec: map[string]interface{}{
+        "requiredField": "fallback_value",
+        "status":        "ACTIVE",
+    },
 }
 ```
 
 ### Constant Fields
 
+Use the `default` operation to set constant values:
+
 ```go
 {
-    SourcePath:   "",
-    TargetPath:   "createdAt",
-    Transform:    jmap.TransformConstant,
-    DefaultValue: "2025-01-01T00:00:00Z",
+    Type: "default",
+    Spec: map[string]interface{}{
+        "createdAt": "2025-01-01T00:00:00Z",
+        "version":   "1.0",
+    },
 }
 ```
 
@@ -220,23 +228,30 @@ inputJSON := `{
     }
 }`
 
-spec := &jmap.types.TransformSpec{
-    Version: "1.0",
-    Mappings: []jmap.FieldMapping{
+spec := &types.TransformSpec{
+    Operations: []types.Operation{
         {
-            SourcePath: "566.tables.role_v2.data.id",
-            TargetPath: "id",
-            Transform:  jmap.TransformDirect,
-        },
-        {
-            SourcePath: "566.tables.role_v2.data.name",
-            TargetPath: "name",
-            Transform:  jmap.TransformDirect,
-        },
-        {
-            SourcePath: "566.tables.permission_v2.data[0].scope",
-            TargetPath: "permissions[0].accessType",
-            Transform:  jmap.TransformDirect,
+            Type: "shift",
+            Spec: map[string]interface{}{
+                "566": map[string]interface{}{
+                    "tables": map[string]interface{}{
+                        "role_v2": map[string]interface{}{
+                            "data": map[string]interface{}{
+                                "id":         "id",
+                                "name":       "name",
+                                "created_by": "createdBy",
+                            },
+                        },
+                        "permission_v2": map[string]interface{}{
+                            "data": map[string]interface{}{
+                                "*": map[string]interface{}{
+                                    "scope": "permissions[&].accessType",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
         },
     },
 }

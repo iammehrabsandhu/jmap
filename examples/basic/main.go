@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// Example 1: Generate a spec
+	// Ex 1: Suggest Spec.
 	fmt.Println("=== Example 1: Suggest Spec ===")
 
 	inputJSON := `{
@@ -160,7 +160,7 @@ func main() {
 	fmt.Println("Generated Spec:")
 	fmt.Println(string(specJSON))
 
-	// Example 4: Default values
+	// Ex 4: Defaults.
 	fmt.Println("\n=== Example 4: Default Values ===")
 
 	// incompleteInput := `{

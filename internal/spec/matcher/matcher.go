@@ -5,20 +5,19 @@ import (
 	"strings"
 )
 
-// FieldMatcher provides intelligent field name matching
+// FieldMatcher matches field names.
 type FieldMatcher struct {
 	caseSensitive bool
 }
 
-// NewFieldMatcher creates a new field matcher
+// NewFieldMatcher creates a matcher.
 func NewFieldMatcher(caseSensitive bool) *FieldMatcher {
 	return &FieldMatcher{
 		caseSensitive: caseSensitive,
 	}
 }
 
-// Match calculates similarity between two field names
-// Returns a score from 0.0 (no match) to 1.0 (perfect match)
+// Match scores similarity (0.0 to 1.0).
 func (m *FieldMatcher) Match(field1, field2 string) float64 {
 	if field1 == "" || field2 == "" {
 		return 0.0
@@ -31,12 +30,12 @@ func (m *FieldMatcher) Match(field1, field2 string) float64 {
 		field2 = strings.ToLower(field2)
 	}
 
-	// Exact match
+	// Exact match.
 	if field1 == field2 {
 		return 1.0
 	}
 
-	// Normalize and compare
+	// Normalize.
 	norm1 := normalize(field1)
 	norm2 := normalize(field2)
 
@@ -44,7 +43,7 @@ func (m *FieldMatcher) Match(field1, field2 string) float64 {
 		return 0.95
 	}
 
-	// Check substring matches
+	// Substring check.
 	if strings.Contains(norm1, norm2) || strings.Contains(norm2, norm1) {
 		shorter := len(norm1)
 		if len(norm2) < shorter {
@@ -55,14 +54,14 @@ func (m *FieldMatcher) Match(field1, field2 string) float64 {
 			longer = len(norm2)
 		}
 
-		// Base score for substring match
+		// Base score.
 		score := 0.6
 
-		// Bonus for high overlap ratio
+		// Overlap bonus.
 		ratio := float64(shorter) / float64(longer)
 		score += 0.3 * ratio
 
-		// Bonus for prefix/suffix
+		// Prefix/Suffix bonus.
 		if strings.HasPrefix(norm1, norm2) || strings.HasPrefix(norm2, norm1) ||
 			strings.HasSuffix(norm1, norm2) || strings.HasSuffix(norm2, norm1) {
 			score += 0.1
@@ -71,12 +70,12 @@ func (m *FieldMatcher) Match(field1, field2 string) float64 {
 		return score
 	}
 
-	// Check for common patterns (camelCase vs snake_case)
+	// Pattern check (camel vs snake).
 	if camelToSnake(original1) == camelToSnake(original2) {
 		return 0.9
 	}
 
-	// Levenshtein distance for fuzzy matching
+	// Fuzzy match (Levenshtein).
 	distance := levenshtein(norm1, norm2)
 	maxLen := len(norm1)
 	if len(norm2) > maxLen {
@@ -89,13 +88,13 @@ func (m *FieldMatcher) Match(field1, field2 string) float64 {
 
 	similarity := 1.0 - float64(distance)/float64(maxLen)
 	if similarity > 0.6 {
-		return similarity * 0.8 // Scale down fuzzy matches
+		return similarity * 0.8 // Scale down.
 	}
 
 	return 0.0
 }
 
-// normalize removes common separators and standardizes field names
+// normalize cleans field names.
 func normalize(field string) string {
 	field = strings.ToLower(field)
 	field = strings.ReplaceAll(field, "_", "")
@@ -104,7 +103,7 @@ func normalize(field string) string {
 	return field
 }
 
-// camelToSnake converts camelCase to snake_case for comparison
+// camelToSnake converts to snake_case.
 func camelToSnake(s string) string {
 	var result strings.Builder
 	for i, r := range s {
@@ -116,7 +115,7 @@ func camelToSnake(s string) string {
 	return strings.ToLower(result.String())
 }
 
-// levenshtein calculates the Levenshtein distance between two strings
+// levenshtein distance.
 func levenshtein(s1, s2 string) int {
 	if len(s1) == 0 {
 		return len(s2)
@@ -125,7 +124,7 @@ func levenshtein(s1, s2 string) int {
 		return len(s1)
 	}
 
-	// Create matrix
+	// Init matrix.
 	matrix := make([][]int, len(s1)+1)
 	for i := range matrix {
 		matrix[i] = make([]int, len(s2)+1)
@@ -135,7 +134,7 @@ func levenshtein(s1, s2 string) int {
 		matrix[0][j] = j
 	}
 
-	// Calculate distances
+	// Calc distances.
 	for i := 1; i <= len(s1); i++ {
 		for j := 1; j <= len(s2); j++ {
 			cost := 1
@@ -154,7 +153,7 @@ func levenshtein(s1, s2 string) int {
 	return matrix[len(s1)][len(s2)]
 }
 
-// min returns the minimum of three integers
+// min of three.
 func min(a, b, c int) int {
 	if a < b {
 		if a < c {
@@ -168,7 +167,7 @@ func min(a, b, c int) int {
 	return c
 }
 
-// TypesCompatible checks if source and target types are compatible for transformation
+// TypesCompatible checks type safety.
 func TypesCompatible(source, target interface{}) bool {
 	if source == nil || target == nil {
 		return true
@@ -177,17 +176,17 @@ func TypesCompatible(source, target interface{}) bool {
 	sourceType := reflect.TypeOf(source).Kind()
 	targetType := reflect.TypeOf(target).Kind()
 
-	// Exact type match
+	// Exact match.
 	if sourceType == targetType {
 		return true
 	}
 
-	// String types are compatible with anything (can be converted)
+	// Strings match anything.
 	if sourceType == reflect.String || targetType == reflect.String {
 		return true
 	}
 
-	// Numeric types are compatible with each other
+	// Numerics match.
 	numericTypes := map[reflect.Kind]bool{
 		reflect.Int:     true,
 		reflect.Int8:    true,
@@ -207,13 +206,13 @@ func TypesCompatible(source, target interface{}) bool {
 		return true
 	}
 
-	// Arrays and slices are compatible
+	// Arrays/Slices match.
 	if (sourceType == reflect.Array || sourceType == reflect.Slice) &&
 		(targetType == reflect.Array || targetType == reflect.Slice) {
 		return true
 	}
 
-	// Maps are compatible
+	// Maps match.
 	if sourceType == reflect.Map && targetType == reflect.Map {
 		return true
 	}

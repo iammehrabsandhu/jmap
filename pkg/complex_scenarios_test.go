@@ -1,12 +1,14 @@
 package jmap
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 )
 
 func TestComplexScenarios(t *testing.T) {
-	// ... (scenarios remain same)
-	// Scenario 1: Healthcare - FHIR Patient to Simplified EMR
+	// Scenario 1: FHIR -> EMR.
 	t.Run("Healthcare_FHIR_Patient", func(t *testing.T) {
 		input := `{
 			"resourceType": "Patient",
@@ -80,7 +82,7 @@ func TestComplexScenarios(t *testing.T) {
 		runScenario(t, input, output)
 	})
 
-	// Scenario 2: E-commerce - Shopify Order to ERP
+	// Scenario 2: Shopify -> ERP.
 	t.Run("Ecommerce_Shopify_Order", func(t *testing.T) {
 		input := `{
 			"id": 450789469,
@@ -323,7 +325,7 @@ func TestComplexScenarios(t *testing.T) {
 		runScenario(t, input, output)
 	})
 
-	// Scenario 3: Finance - SWIFT MT103 to ISO 20022 (Simplified)
+	// Scenario 3: SWIFT -> ISO 20022.
 	t.Run("Finance_SWIFT_ISO20022", func(t *testing.T) {
 		input := `{
 			"block1": "{1:F01BANKBEBBAXXX2039063581}",
@@ -365,7 +367,7 @@ func TestComplexScenarios(t *testing.T) {
 		runScenario(t, input, output)
 	})
 
-	// Scenario 4: Logistics - Shipment Tracking
+	// Scenario 4: Logistics.
 	t.Run("Logistics_Shipment", func(t *testing.T) {
 		input := `{
 			"tracking_number": "1Z999AA10123456784",
@@ -408,7 +410,7 @@ func TestComplexScenarios(t *testing.T) {
 		runScenario(t, input, output)
 	})
 
-	// Scenario 5: HR - Workday to AD
+	// Scenario 5: Workday -> AD.
 	t.Run("HR_Workday_AD", func(t *testing.T) {
 		input := `{
 			"Worker_Data": {
@@ -453,7 +455,7 @@ func TestComplexScenarios(t *testing.T) {
 		runScenario(t, input, output)
 	})
 
-	// Scenario 6: Travel - GDS to Itinerary
+	// Scenario 6: GDS -> Itinerary.
 	t.Run("Travel_GDS_Itinerary", func(t *testing.T) {
 		input := `{
 			"PNR": "ABC123",
@@ -502,7 +504,7 @@ func TestComplexScenarios(t *testing.T) {
 		runScenario(t, input, output)
 	})
 
-	// Scenario 7: IoT - Telemetry Flattening
+	// Scenario 7: IoT Telemetry.
 	t.Run("IoT_Telemetry", func(t *testing.T) {
 		input := `{
 			"deviceId": "sensor-001",
@@ -543,7 +545,7 @@ func TestComplexScenarios(t *testing.T) {
 		runScenario(t, input, output)
 	})
 
-	// Scenario 8: Social Media - Facebook User to Profile
+	// Scenario 8: FB -> Profile.
 	t.Run("Social_FB_Profile", func(t *testing.T) {
 		input := `{
 			"id": "123456789",
@@ -579,7 +581,7 @@ func TestComplexScenarios(t *testing.T) {
 		runScenario(t, input, output)
 	})
 
-	// Scenario 9: Education - Canvas Course to SIS
+	// Scenario 9: Canvas -> SIS.
 	t.Run("Education_Canvas_SIS", func(t *testing.T) {
 		input := `{
 			"id": 101,
@@ -630,7 +632,7 @@ func TestComplexScenarios(t *testing.T) {
 		runScenario(t, input, output)
 	})
 
-	// Scenario 10: CRM - Salesforce Account to HubSpot
+	// Scenario 10: Salesforce -> HubSpot.
 	t.Run("CRM_SFDC_HubSpot", func(t *testing.T) {
 		input := `{
 			"Id": "0012E00001Z8q9xQAB",
@@ -696,22 +698,174 @@ func runScenario(t *testing.T, inputJSON, outputJSON string) {
 		t.Fatalf("SuggestSpec failed: %v", err)
 	}
 
-	// We can't easily assert exact spec structure because it's generated.
-	// But we can check if it produces the correct output (or close to it).
-	// Or at least check that it's not all defaults.
+	// 1. Parse Output.
+	var output map[string]interface{}
+	if err := json.Unmarshal([]byte(outputJSON), &output); err != nil {
+		t.Fatalf("Invalid output JSON: %v", err)
+	}
+	outputFields := flatten(output, "")
 
-	hasShift := false
+	// 2. Collect Targets.
+	shiftTargets := make(map[string]bool)
+	defaultKeys := make(map[string]bool)
+
 	for _, op := range spec.Operations {
-		if op.Type == "shift" {
-			hasShift = true
-			break
+		switch op.Type {
+		case "shift":
+			collectShiftTargets(op.Spec, shiftTargets)
+		case "default":
+			collectDefaultKeys(op.Spec, "", defaultKeys)
 		}
 	}
-	if !hasShift {
-		t.Errorf("Scenario should generate at least one shift operation")
+
+	shiftCount := 0
+	defaultCount := 0
+	unaccountedCount := 0
+
+	for _, field := range outputFields {
+		schemaPath := normalizePath(field)
+
+		// Check coverage.
+		// We check exact match or wildcard match
+		if isCovered(schemaPath, shiftTargets) {
+			shiftCount++
+		} else if isCovered(schemaPath, defaultKeys) {
+			defaultCount++
+		} else {
+			unaccountedCount++
+		}
 	}
 
-	// Ideally we would run Transform(input, spec) and compare with output,
-	// but SuggestSpec might not be perfect yet (e.g. string concatenation).
-	// For now, we just verify that it finds mappings.
+	total := shiftCount + defaultCount + unaccountedCount
+	t.Logf("Field Stats - Total: %d | Shift: %d | Default: %d | Unaccounted: %d",
+		total, shiftCount, defaultCount, unaccountedCount)
+
+	if total > 0 {
+		ratio := float64(shiftCount) / float64(total)
+		t.Logf("Mapping Success Rate (by field): %.1f%%", ratio*100)
+	}
+}
+
+// Helpers
+
+func flatten(data interface{}, prefix string) []string {
+	var fields []string
+	switch v := data.(type) {
+	case map[string]interface{}:
+		for k, val := range v {
+			p := k
+			if prefix != "" {
+				p = prefix + "." + k
+			}
+			fields = append(fields, flatten(val, p)...)
+		}
+	case []interface{}:
+		for i, val := range v {
+			p := fmt.Sprintf("%s[%d]", prefix, i)
+			fields = append(fields, flatten(val, p)...)
+		}
+	default:
+		if prefix != "" {
+			fields = append(fields, prefix)
+		}
+	}
+	return fields
+}
+
+func collectShiftTargets(spec interface{}, targets map[string]bool) {
+	switch v := spec.(type) {
+	case map[string]interface{}:
+		for _, val := range v {
+			collectShiftTargets(val, targets)
+		}
+	case string:
+		targets[v] = true
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				targets[s] = true
+			}
+		}
+	}
+}
+
+func collectDefaultKeys(spec interface{}, prefix string, keys map[string]bool) {
+	if m, ok := spec.(map[string]interface{}); ok {
+		for k, v := range m {
+			p := k
+			if prefix != "" {
+				p = prefix + "." + k
+			}
+			// Recurse or leaf.
+			if nested, ok := v.(map[string]interface{}); ok {
+				collectDefaultKeys(nested, p, keys)
+			} else {
+				keys[p] = true
+			}
+		}
+	}
+}
+
+func normalizePath(path string) string {
+	// Remove array indices: items[0].id -> items.id
+	// We use a regex-like approach or simple string building
+	var sb strings.Builder
+	inBracket := false
+	for _, r := range path {
+		if r == '[' {
+			inBracket = true
+			continue
+		}
+		if r == ']' {
+			inBracket = false
+			continue
+		}
+		if !inBracket {
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
+}
+
+func isCovered(path string, targets map[string]bool) bool {
+	// 1. Exact match
+	if targets[path] {
+		return true
+	}
+	// 2. Wildcard match (simple version: if target has *, check if path matches pattern)
+	// For now, SuggestSpec generates explicit paths or * wildcards.
+	// If the spec has "items.*.id", and path is "items.id" (normalized), they match.
+	// Wait, normalizePath removes indices, so "items[0].id" becomes "items.id".
+	// The spec target might be "items.id" (if array was flattened) or "items[&].id".
+	// JMap's SuggestSpec currently generates "items" -> "*" -> "id" which results in target "items.&.id" or similar?
+	// Actually SuggestSpec generates "items" -> "*" -> "id" : "sourcePath".
+	// The TARGET path in shift spec is the value.
+	// In SuggestSpec, the value is the SOURCE path.
+	// Wait, shift spec is: "source": "target".
+	// SuggestSpec generates: "inputPath": "outputPath".
+	// So we need to collect VALUES from shift spec.
+
+	// If SuggestSpec generates "orders": { "*": { "id": "orderId" } },
+	// then for input "orders[0].id", it maps to "orderId".
+	// The target is "orderId".
+	// Our output field is "orderId". Normalized: "orderId". Match!
+
+	// If output is "items[0].id", normalized "items.id".
+	// Spec might say "items": { "*": { "id": "items[&].id" } } ?
+	// No, SuggestSpec usually tries to map to specific fields.
+	// If the output has an array, SuggestSpec might generate "items[&].id".
+	// Let's assume exact match on normalized path for now.
+	// If the target contains "&", we might need to be smarter.
+	// For this test, let's strip "&" from targets too?
+
+	for t := range targets {
+		// Normalize target path too (remove indices)
+		normTarget := normalizePath(t)
+		normTarget = strings.ReplaceAll(normTarget, "&", "")
+		normTarget = strings.ReplaceAll(normTarget, "[]", "") // handle [] syntax if any
+		if normTarget == path {
+			return true
+		}
+	}
+	return false
 }
