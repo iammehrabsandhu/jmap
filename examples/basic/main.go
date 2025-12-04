@@ -10,10 +10,6 @@ import (
 )
 
 func main() {
-<<<<<<< HEAD
-=======
-	// Ex 1: Suggest Spec.
->>>>>>> 54d3f519784440f1adf290e6d705c0b7ad321024
 	fmt.Println("=== Example 1: Suggest Spec ===")
 
 	inputJSON := `{
@@ -138,41 +134,7 @@ func main() {
 
 	fmt.Println(string(specJSON))
 
-<<<<<<< HEAD
 	fmt.Println("\n=== Example transformation ===")
-=======
-	// Ex 4: Defaults.
-	fmt.Println("\n=== Example 4: Default Values ===")
-
-	// incompleteInput := `{
-	// 	"user": {
-	// 		"name": "John"
-	// 	}
-	// }`
-
-	// defaultSpec := &types.TransformSpec{
-	// 	Version: "1.0",
-	// 	Mappings: []types.FieldMapping{
-	// 		{
-	// 			SourcePath: "user.name",
-	// 			TargetPath: "name",
-	// 			Transform:  types.TransformDirect,
-	// 		},
-	// 		{
-	// 			SourcePath:   "user.email",
-	// 			TargetPath:   "email",
-	// 			Transform:    types.TransformDirect,
-	// 			DefaultValue: "no-email@example.com",
-	// 		},
-	// 		{
-	// 			SourcePath:   "",
-	// 			TargetPath:   "status",
-	// 			Transform:    types.TransformConstant,
-	// 			DefaultValue: "ACTIVE",
-	// 		},
-	// 	},
-	// }
->>>>>>> 54d3f519784440f1adf290e6d705c0b7ad321024
 
 	defaultResult, err := jmap.Transform(inputJSON, spec1)
 	if err != nil {
