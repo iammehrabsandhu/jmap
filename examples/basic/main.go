@@ -6,10 +6,10 @@ import (
 	"log"
 
 	jmap "github.com/iammehrabsandhu/jmap/pkg"
+	"github.com/iammehrabsandhu/jmap/types"
 )
 
 func main() {
-	// Ex 1: Suggest Spec.
 	fmt.Println("=== Example 1: Suggest Spec ===")
 
 	inputJSON := `{
@@ -58,145 +58,88 @@ func main() {
 }
 `
 
-	outputJSON := `{
-  "id": "",
-  "name": "",
-  "createdAt": "2025-03-02T14:16:49.240985632Z",
-  "createdBy": "",
-  "permissions": [
-    {
-      "accessType": "",
-      "dimensions": [
-        {
-          "facility": {
-            "value": [
-              ""
-            ]
-          },
-          "geography": {
-            "value": [
-              ""
-            ]
-          },
-          "family_tree": {
-            "value": [
-              ""
-            ]
-          }
-        }
-      ],
-      "application": ""
-    }
-  ]
-}
-`
-
-	// spec := &types.TransformSpec{
-	// 	Operations: []types.Operation{
-	// 		{
-	// 			// ---- SHIFT -------------------------------------------------
-	// 			Type: "shift",
-	// 			Spec: map[string]interface{}{
-	// 				// ── orders ───────────────────────────────────────
-	// 				"orders": map[string]interface{}{
-	// 					// “*” iterates over every element of the orders array.
-	// 					"*": map[string]interface{}{
-	// 						// orderId ← orders[i].id
-	// 						"id": "orderId",
-
-	// 						// ── customer ─────────────────────────────
-	// 						"customer": map[string]interface{}{
-	// 							// We expose the two name parts separately – they can be
-	// 							// concatenated later in Go (jmap has no built‑in concat).
-	// 							"firstName": "firstName",
-	// 							"lastName":  "lastName",
-
-	// 							// city ← orders[i].customer.address.city
-	// 							"address": map[string]interface{}{
-	// 								"city": "city",
-	// 							},
-	// 						},
-
-	// 						// ── items (used only to collect qty/price) ─────
-	// 						"items": map[string]interface{}{
-	// 							"*": map[string]interface{}{
-	// 								// Store each qty / price in a temporary array.
-	// 								// These helpers will be removed (or used for a post‑step
-	// 								// calculation) after the shift.
-	// 								"qty":   "tmpQty[]",
-	// 								"price": "tmpPrice[]",
-	// 							},
-	// 						},
-
-	// 						// status ← orders[i].status
-	// 						"status": "status",
-	// 					},
-	// 				},
-
-	// 				// ── metadata ───────────────────────────────────────
-	// 				"metadata": map[string]interface{}{
-	// 					// generatedAt is copied unchanged.
-	// 					"generatedAt": "generatedAt",
-	// 				},
-	// 			},
-	// 		},
-
-	// 		// -----------------------------------------------------------------
-	// 		// NOTE: JMap currently does **not** have an expression engine, so the
-	// 		//       `total` field (sum of qty*price) and the combined
-	// 		//       (firstName + " " + lastName) must be derived in Go after the
-	// 		//       shift step.  No `default` operation is required because every
-	// 		//       target field is produced by the shift.
-	// 		// -----------------------------------------------------------------
-	// 	},
+	// 	outputJSON := `{
+	//   "id": "",
+	//   "name": "",
+	//   "createdAt": "2025-03-02T14:16:49.240985632Z",
+	//   "createdBy": "",
+	//   "permissions": [
+	//     {
+	//       "accessType": "",
+	//       "dimensions": [
+	//         {
+	//           "facility": {
+	//             "value": [
+	//               ""
+	//             ]
+	//           },
+	//           "geography": {
+	//             "value": [
+	//               ""
+	//             ]
+	//           },
+	//           "family_tree": {
+	//             "value": [
+	//               ""
+	//             ]
+	//           }
+	//         }
+	//       ],
+	//       "application": ""
+	//     }
+	//   ]
 	// }
-
-	spec1, err := jmap.SuggestSpec(inputJSON, outputJSON)
-	if err != nil {
-		log.Fatal(err)
+	// `
+	// spec1, err := jmap.SuggestSpec(inputJSON, outputJSON)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	spec1 := &types.TransformSpec{
+		Operations: []types.Operation{
+			{
+				Type: "shift",
+				Spec: map[string]interface{}{
+					"566": map[string]interface{}{
+						"tables": map[string]interface{}{
+							"role_v2": map[string]interface{}{
+								"data": map[string]interface{}{
+									"id":         "id",
+									"name":       "name",
+									"created_at": "createdAt",
+									"created_by": "createdBy",
+									"lookup": map[string]interface{}{
+										"facility": "permissions[0].dimensions[0].facility.value",
+										"geo":      "permissions[0].dimensions[0].geography.value",
+										"ft":       "permissions[0].dimensions[0].family_tree.value",
+									},
+								},
+							},
+							"permission_v2": map[string]interface{}{
+								"data": map[string]interface{}{
+									"*": map[string]interface{}{
+										"scope":          "permissions[&1].accessType",
+										"application_id": "permissions[&1].application",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
-
 	specJSON, _ := json.MarshalIndent(spec1, "", "  ")
+
 	fmt.Println("Generated Spec:")
+
 	fmt.Println(string(specJSON))
 
-	// Ex 4: Defaults.
-	fmt.Println("\n=== Example 4: Default Values ===")
-
-	// incompleteInput := `{
-	// 	"user": {
-	// 		"name": "John"
-	// 	}
-	// }`
-
-	// defaultSpec := &types.TransformSpec{
-	// 	Version: "1.0",
-	// 	Mappings: []types.FieldMapping{
-	// 		{
-	// 			SourcePath: "user.name",
-	// 			TargetPath: "name",
-	// 			Transform:  types.TransformDirect,
-	// 		},
-	// 		{
-	// 			SourcePath:   "user.email",
-	// 			TargetPath:   "email",
-	// 			Transform:    types.TransformDirect,
-	// 			DefaultValue: "no-email@example.com",
-	// 		},
-	// 		{
-	// 			SourcePath:   "",
-	// 			TargetPath:   "status",
-	// 			Transform:    types.TransformConstant,
-	// 			DefaultValue: "ACTIVE",
-	// 		},
-	// 	},
-	// }
+	fmt.Println("\n=== Example transformation ===")
 
 	defaultResult, err := jmap.Transform(inputJSON, spec1)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Result with Defaults:")
 	fmt.Println(defaultResult)
 }

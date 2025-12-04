@@ -176,6 +176,7 @@ func (a *Analyzer) findBestMapping(targetPath string, targetValue interface{},
 
 	// Extract field name.
 	targetField, targetParent := pathutil.GetSchemaNames(targetPath)
+	targetDepth := getPathDepth(targetPath)
 
 	var bestPath string
 	var bestScore float64
@@ -183,6 +184,7 @@ func (a *Analyzer) findBestMapping(targetPath string, targetValue interface{},
 	// Find matches.
 	for sourcePath, sourceValue := range inputPaths {
 		sourceField, sourceParent := pathutil.GetSchemaNames(sourcePath)
+		sourceDepth := getPathDepth(sourcePath)
 
 		// 1. Leaf match.
 		score := a.matcher.Match(sourceField, targetField)
@@ -234,6 +236,24 @@ func (a *Analyzer) findBestMapping(targetPath string, targetValue interface{},
 			}
 		}
 
+		// 6. Structural depth bonus - prefer similar nesting levels.
+		depthDiff := abs(sourceDepth - targetDepth)
+		if depthDiff == 0 {
+			score *= 1.05 // Bonus for same depth
+		} else if depthDiff == 1 {
+			score *= 1.02 // Small bonus for adjacent depth
+		} else if depthDiff > 2 {
+			score *= 0.9 // Penalty for large depth difference
+		}
+
+		// 7. Parent context matching - prefer matching parent names.
+		if sourceParent != "" && targetParent != "" {
+			parentMatchScore := a.matcher.Match(sourceParent, targetParent)
+			if parentMatchScore > 0.8 {
+				score *= 1.1 // Bonus for matching parents
+			}
+		}
+
 		// Check types.
 		if !matcher.TypesCompatible(sourceValue, targetValue) {
 			score *= 0.1 // Penalty for mismatch.
@@ -252,4 +272,23 @@ func (a *Analyzer) findBestMapping(targetPath string, targetValue interface{},
 	}
 
 	return bestPath
+}
+
+// getPathDepth returns the nesting level of a path.
+func getPathDepth(path string) int {
+	depth := 0
+	for _, c := range path {
+		if c == '.' || c == '[' {
+			depth++
+		}
+	}
+	return depth
+}
+
+// abs returns absolute value.
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
