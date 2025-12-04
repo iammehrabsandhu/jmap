@@ -82,22 +82,33 @@ func main() {
 
 ```go
 inputJSON := `{
-    "566": {
-        "tables": {
-            "role_v2": {
-                "data": {
-                    "id": "f2e4bf21",
-                    "name": "testRole2"
-                }
-            }
-        }
-    }
-}`
+		"rating": {
+			"primary": {
+				"value": 3
+			},
+			"quality": {
+				"value": 3
+			}
+		}
+	}`
 
 outputJSON := `{
-    "id": "",
-    "name": ""
-}`
+		"operations": [
+			{
+				"type": "shift",
+				"spec": {
+					"rating": {
+						"primary": {
+							"value": "Rating"
+						},
+						"quality": {
+							"value": "SecondaryRating"
+						}
+					}
+				}
+			}
+		]
+	}`
 
 spec, _ := jmap.SuggestSpec(inputJSON, outputJSON)
 // spec now contains suggested mappings
@@ -127,13 +138,13 @@ jmap transform -input data.json -spec spec.json -output result.json
   "version": "1.0",
   "mappings": [
     {
-      "source_path": "566.tables.role_v2.data.name",
-      "target_path": "name",
+      "source_path": "organization.users.profile.name",
+      "target_path": "userName",
       "transform": "direct"
     },
     {
-      "source_path": "566.tables.role_v2.data.id",
-      "target_path": "id",
+      "source_path": "organization.users.profile.id",
+      "target_path": "userId",
       "transform": "direct"
     },
     {
@@ -201,30 +212,28 @@ Use the `default` operation to set constant values:
 
 ## Real-World Example
 
-Transform your complex role data structure:
+Transform a complex organization data structure:
 
 ```go
 inputJSON := `{
-    "566": {
-        "tables": {
-            "role_v2": {
-                "data": {
-                    "id": "f2e4bf21-d6be-4627-b971-6d2ba2ed4858",
-                    "name": "testRole2",
-                    "created_by": "Sharma, Amisha (NonEmp)",
-                    "lookup": {
-                        "geo": ["OH"]
-                    }
+    "organization": {
+        "users": {
+            "profile": {
+                "id": "user-12345",
+                "name": "John Doe",
+                "email": "john@example.com",
+                "metadata": {
+                    "department": ["Engineering"]
                 }
-            },
-            "permission_v2": {
-                "data": [
-                    {
-                        "scope": "14",
-                        "application_id": "214800a5"
-                    }
-                ]
             }
+        },
+        "roles": {
+            "assignments": [
+                {
+                    "scope": "full",
+                    "role_type": "admin"
+                }
+            ]
         }
     }
 }`
@@ -234,20 +243,18 @@ spec := &types.TransformSpec{
         {
             Type: "shift",
             Spec: map[string]interface{}{
-                "566": map[string]interface{}{
-                    "tables": map[string]interface{}{
-                        "role_v2": map[string]interface{}{
-                            "data": map[string]interface{}{
-                                "id":         "id",
-                                "name":       "name",
-                                "created_by": "createdBy",
-                            },
+                "organization": map[string]interface{}{
+                    "users": map[string]interface{}{
+                        "profile": map[string]interface{}{
+                            "id":    "userId",
+                            "name":  "userName",
+                            "email": "userEmail",
                         },
-                        "permission_v2": map[string]interface{}{
-                            "data": map[string]interface{}{
-                                "*": map[string]interface{}{
-                                    "scope": "permissions[&].accessType",
-                                },
+                    },
+                    "roles": map[string]interface{}{
+                        "assignments": map[string]interface{}{
+                            "*": map[string]interface{}{
+                                "scope": "roleAssignments[&1].accessScope",
                             },
                         },
                     },

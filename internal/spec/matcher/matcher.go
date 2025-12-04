@@ -10,6 +10,32 @@ type FieldMatcher struct {
 	caseSensitive bool
 }
 
+// Common synonyms for field matching.
+var synonyms = map[string][]string{
+	"id":          {"uid", "identifier", "key"},
+	"uid":         {"id", "identifier", "key"},
+	"name":        {"title", "label", "displayname"},
+	"title":       {"name", "label", "jobtitle"},
+	"firstname":   {"givenname", "first", "fname"},
+	"lastname":    {"sn", "surname", "familyname", "lname"},
+	"email":       {"mail", "emailaddress", "contactemail"},
+	"mail":        {"email", "emailaddress", "contactemail"},
+	"phone":       {"telephone", "phonenumber", "tel"},
+	"address":     {"street", "streetaddress", "addr"},
+	"city":        {"town", "locality"},
+	"state":       {"province", "region"},
+	"zip":         {"postalcode", "postcode", "zipcode"},
+	"postalcode":  {"zip", "postcode", "zipcode"},
+	"country":     {"nation", "countrycode"},
+	"description": {"desc", "summary", "details"},
+	"created":     {"createdat", "createdtime", "createdon"},
+	"updated":     {"updatedat", "updatedtime", "modifiedat"},
+	"price":       {"cost", "amount", "unitprice"},
+	"quantity":    {"qty", "count", "amount"},
+	"status":      {"state", "currentstatus"},
+	"type":        {"kind", "category"},
+}
+
 // NewFieldMatcher creates a matcher.
 func NewFieldMatcher(caseSensitive bool) *FieldMatcher {
 	return &FieldMatcher{
@@ -41,6 +67,11 @@ func (m *FieldMatcher) Match(field1, field2 string) float64 {
 
 	if norm1 == norm2 {
 		return 0.95
+	}
+
+	// Synonym check.
+	if isSynonym(norm1, norm2) {
+		return 0.92
 	}
 
 	// Substring check.
@@ -92,6 +123,25 @@ func (m *FieldMatcher) Match(field1, field2 string) float64 {
 	}
 
 	return 0.0
+}
+
+// isSynonym checks if two normalized fields are synonyms.
+func isSynonym(norm1, norm2 string) bool {
+	if syns, ok := synonyms[norm1]; ok {
+		for _, s := range syns {
+			if s == norm2 {
+				return true
+			}
+		}
+	}
+	if syns, ok := synonyms[norm2]; ok {
+		for _, s := range syns {
+			if s == norm1 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // normalize cleans field names.

@@ -3,8 +3,11 @@ package jmap
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
+
+	jmap "github.com/iammehrabsandhu/jmap/pkg"
 )
 
 func TestComplexScenarios(t *testing.T) {
@@ -693,19 +696,73 @@ func TestComplexScenarios(t *testing.T) {
 }
 
 func runScenario(t *testing.T, inputJSON, outputJSON string) {
-	spec, err := SuggestSpec(inputJSON, outputJSON)
+	spec, err := jmap.SuggestSpec(inputJSON, outputJSON)
 	if err != nil {
 		t.Fatalf("SuggestSpec failed: %v", err)
 	}
 
-	// 1. Parse Output.
-	var output map[string]interface{}
-	if err := json.Unmarshal([]byte(outputJSON), &output); err != nil {
-		t.Fatalf("Invalid output JSON: %v", err)
+	// 1. Transform.
+	resultJSON, err := jmap.Transform(inputJSON, spec)
+	if err != nil {
+		t.Fatalf("Transform failed: %v", err)
 	}
-	outputFields := flatten(output, "")
 
-	// 2. Collect Targets.
+	var expected, actual interface{}
+	if err := json.Unmarshal([]byte(outputJSON), &expected); err != nil {
+		t.Fatalf("Invalid expected output JSON: %v", err)
+	}
+	if err := json.Unmarshal([]byte(resultJSON), &actual); err != nil {
+		t.Fatalf("Invalid actual output JSON: %v", err)
+	}
+
+	// 2. Calculate field-level accuracy.
+	expectedFields := flattenWithValues(expected, "")
+	actualFields := flattenWithValues(actual, "")
+
+	matchedFields := 0
+	mismatchedFields := []string{}
+	missingFields := []string{}
+	extraFields := []string{}
+
+	for path, expectedVal := range expectedFields {
+		if actualVal, exists := actualFields[path]; exists {
+			if reflect.DeepEqual(expectedVal, actualVal) {
+				matchedFields++
+			} else {
+				mismatchedFields = append(mismatchedFields, path)
+			}
+		} else {
+			missingFields = append(missingFields, path)
+		}
+	}
+
+	for path := range actualFields {
+		if _, exists := expectedFields[path]; !exists {
+			extraFields = append(extraFields, path)
+		}
+	}
+
+	totalExpected := len(expectedFields)
+	accuracy := 0.0
+	if totalExpected > 0 {
+		accuracy = float64(matchedFields) / float64(totalExpected) * 100
+	}
+
+	// 3. Log accuracy report (not a failure).
+	t.Logf("Output Accuracy: %.1f%% (%d/%d fields match)", accuracy, matchedFields, totalExpected)
+
+	if len(mismatchedFields) > 0 {
+		t.Logf("  Mismatched fields: %v", mismatchedFields)
+	}
+	if len(missingFields) > 0 {
+		t.Logf("  Missing fields: %v", missingFields)
+	}
+	if len(extraFields) > 0 {
+		t.Logf("  Extra fields: %v", extraFields)
+	}
+
+	// 4. Stats - count shift/default operations (unchanged logic).
+	outputFields := flatten(expected, "")
 	shiftTargets := make(map[string]bool)
 	defaultKeys := make(map[string]bool)
 
@@ -725,8 +782,6 @@ func runScenario(t *testing.T, inputJSON, outputJSON string) {
 	for _, field := range outputFields {
 		schemaPath := normalizePath(field)
 
-		// Check coverage.
-		// We check exact match or wildcard match
 		if isCovered(schemaPath, shiftTargets) {
 			shiftCount++
 		} else if isCovered(schemaPath, defaultKeys) {
@@ -737,13 +792,50 @@ func runScenario(t *testing.T, inputJSON, outputJSON string) {
 	}
 
 	total := shiftCount + defaultCount + unaccountedCount
-	t.Logf("Field Stats - Total: %d | Shift: %d | Default: %d | Unaccounted: %d",
+	t.Logf("Spec Stats - Total: %d | Shift: %d | Default: %d | Unaccounted: %d",
 		total, shiftCount, defaultCount, unaccountedCount)
+}
 
-	if total > 0 {
-		ratio := float64(shiftCount) / float64(total)
-		t.Logf("Mapping Success Rate (by field): %.1f%%", ratio*100)
+// flattenWithValues flattens JSON to path -> value map for comparison.
+func flattenWithValues(data interface{}, prefix string) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	switch v := data.(type) {
+	case map[string]interface{}:
+		for key, val := range v {
+			newPrefix := key
+			if prefix != "" {
+				newPrefix = prefix + "." + key
+			}
+
+			switch nested := val.(type) {
+			case map[string]interface{}, []interface{}:
+				for nk, nv := range flattenWithValues(nested, newPrefix) {
+					result[nk] = nv
+				}
+			default:
+				result[newPrefix] = val
+			}
+		}
+	case []interface{}:
+		for i, val := range v {
+			indexPrefix := fmt.Sprintf("%s[%d]", prefix, i)
+			switch nested := val.(type) {
+			case map[string]interface{}, []interface{}:
+				for nk, nv := range flattenWithValues(nested, indexPrefix) {
+					result[nk] = nv
+				}
+			default:
+				result[indexPrefix] = val
+			}
+		}
+	default:
+		if prefix != "" {
+			result[prefix] = v
+		}
 	}
+
+	return result
 }
 
 // Helpers
