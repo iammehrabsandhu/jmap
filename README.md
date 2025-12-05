@@ -17,21 +17,21 @@ jmap/                           # Root repository
 ├── cmd/
 │   └── main.go                 # CLI application
 ├── pkg/
-│   ├── types.go                # Public types (types.TransformSpec, FieldMapping, etc.)
 │   ├── api.go                  # Public API (Transform, SuggestSpec)
-│   └── api_test.go             # API tests
+│   └── testing/                # API tests
 ├── internal/
 │   ├── pathutil/
 │   │   └── parser.go           # Path parsing utilities
 │   ├── transform/
-│   │   ├── engine.go           # Transformation engine
-│   │   └── accessor.go         # JSON value get/set operations
+│   │   └── engine.go           # Transformation engine
 │   └── spec/
 │       ├── analyzer.go         # Spec generation logic
 │       └── matcher/
 │           └── matcher.go      # Field name matching algorithms
+├── types/
+│   └── types.go                # Public types (TransformSpec, Operation, etc.)
 ├── examples/
-│   └── basic.go                # Usage examples
+│   └── basic/main.go           # Usage examples
 ├── go.mod
 └── README.md
 ```
@@ -81,36 +81,23 @@ func main() {
 
 ```go
 inputJSON := `{
-		"rating": {
-			"primary": {
-				"value": 3
-			},
-			"quality": {
-				"value": 3
-			}
-		}
-	}`
+    "user": {
+        "firstName": "John",
+        "lastName": "Doe",
+        "contactEmail": "john@example.com"
+    }
+}`
 
 outputJSON := `{
-		"operations": [
-			{
-				"type": "shift",
-				"spec": {
-					"rating": {
-						"primary": {
-							"value": "Rating"
-						},
-						"quality": {
-							"value": "SecondaryRating"
-						}
-					}
-				}
-			}
-		]
-	}`
+    "name": "John",
+    "email": "john@example.com"
+}`
 
 spec, _ := jmap.SuggestSpec(inputJSON, outputJSON)
-// spec now contains suggested mappings
+// spec now contains the transformation mappings
+// Use it to transform input to match output structure
+result, _ := jmap.Transform(inputJSON, spec)
+// result matches outputJSON
 ```
 
 ### 3. Using the CLI
@@ -134,23 +121,25 @@ jmap transform -input data.json -spec spec.json -output result.json
 
 ```json
 {
-  "version": "1.0",
-  "mappings": [
+  "operations": [
     {
-      "source_path": "organization.users.profile.name",
-      "target_path": "userName",
-      "transform": "direct"
+      "type": "shift",
+      "spec": {
+        "organization": {
+          "users": {
+            "profile": {
+              "name": "userName",
+              "id": "userId"
+            }
+          }
+        }
+      }
     },
     {
-      "source_path": "organization.users.profile.id",
-      "target_path": "userId",
-      "transform": "direct"
-    },
-    {
-      "source_path": "",
-      "target_path": "status",
-      "transform": "constant",
-      "default_value": "ACTIVE"
+      "type": "default",
+      "spec": {
+        "status": "ACTIVE"
+      }
     }
   ]
 }
@@ -334,7 +323,7 @@ result, _ := jmap.Transform(inputJSON, spec)
 ## Testing
 
 ```bash
-go test ./pkg/...
+go test ./...
 ```
 
 ## Contributing
