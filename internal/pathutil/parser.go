@@ -6,7 +6,6 @@ import (
 	"strings"
 )
 
-// Segment is a path part.
 type Segment struct {
 	Key     string
 	IsArray bool
@@ -29,7 +28,6 @@ func Parse(path string) ([]Segment, error) {
 
 		// Check array notation.
 		if idx := strings.Index(part, "["); idx >= 0 {
-			// Validate bracket.
 			if !strings.HasSuffix(part, "]") {
 				return nil, fmt.Errorf("invalid array notation in '%s': missing closing bracket", part)
 			}
@@ -47,15 +45,12 @@ func Parse(path string) ([]Segment, error) {
 				return nil, fmt.Errorf("array index cannot be negative: %d", index)
 			}
 
-			// Add key if exists.
 			if key != "" {
 				segments = append(segments, Segment{Key: key, IsArray: false})
 			}
 
-			// Add array access.
 			segments = append(segments, Segment{IsArray: true, Index: index})
 		} else {
-			// Regular key.
 			segments = append(segments, Segment{Key: part, IsArray: false})
 		}
 	}
@@ -67,7 +62,6 @@ func Parse(path string) ([]Segment, error) {
 	return segments, nil
 }
 
-// Join segments to path.
 func Join(segments []Segment) string {
 	if len(segments) == 0 {
 		return ""
@@ -91,7 +85,6 @@ func Join(segments []Segment) string {
 	return result.String()
 }
 
-// ExtractArrayIndex gets index from "data[0]".
 func ExtractArrayIndex(pathSegment string) int {
 	start := strings.LastIndex(pathSegment, "[")
 	end := strings.LastIndex(pathSegment, "]")
