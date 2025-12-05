@@ -49,13 +49,11 @@ func (e *Engine) applyShift(input interface{}, spec interface{}) (interface{}, e
 func (e *Engine) processShift(input interface{}, spec interface{}, output map[string]interface{}, keyStack []string) error {
 	specMap, ok := spec.(map[string]interface{})
 	if !ok {
-		// Spec needs to be a map at the top level.
 		return fmt.Errorf("invalid shift spec: expected map, got %T", spec)
 	}
 
 	inputMap, ok := input.(map[string]interface{})
 	if !ok {
-		// Input not a map, no traverse.
 		return nil
 	}
 
@@ -102,8 +100,12 @@ func (e *Engine) processShift(input interface{}, spec interface{}, output map[st
 func (e *Engine) processField(val interface{}, key string, specVal interface{}, output map[string]interface{}, keyStack []string) error {
 	switch s := specVal.(type) {
 	case string:
-		// Direct mapping.
-		e.placeValue(output, s, val, keyStack)
+		// Direct mapping or function.
+		path := s
+		if res := e.evaluateFunction(s, val); res != nil {
+			path = fmt.Sprintf("%v", res)
+		}
+		e.placeValue(output, path, val, keyStack)
 	case []interface{}:
 		// Multiple mappings.
 		for _, item := range s {
@@ -184,9 +186,8 @@ func (e *Engine) placeValue(output map[string]interface{}, path string, val inte
 				if stackIdx >= 0 && stackIdx < len(keyStack) {
 					newPath.WriteString(keyStack[stackIdx])
 				} else {
-					// Out of bounds, keep original or empty?
-					// Jolt keeps empty or original? Let's write nothing or keep &?
-					// Let's write the key if found, else nothing (empty string replacement).
+					// Out of bounds, keep original token
+					newPath.WriteString(path[numStart-1 : j])
 				}
 			} else {
 				newPath.WriteByte(path[i])
@@ -194,9 +195,6 @@ func (e *Engine) placeValue(output map[string]interface{}, path string, val inte
 		}
 		path = newPath.String()
 	}
-
-	// Fast path traversal.
-	// We need to handle array notation: "permissions[0]"
 
 	var current interface{} = output
 
@@ -220,6 +218,7 @@ func (e *Engine) placeValue(output map[string]interface{}, path string, val inte
 	}
 }
 
+// nolint: staticcheck
 func parsePath(path string) []string {
 	var segments []string
 	var sb strings.Builder
@@ -371,29 +370,45 @@ func (e *Engine) applyDefault(input interface{}, spec interface{}) (interface{},
 
 // Regex patterns for function parsing.
 var (
-	concatPattern = regexp.MustCompile(`^@concat\((.*)\)$`)
-	lookupPattern = regexp.MustCompile(`^@lookup\(([^,]+),\s*'([^']*)',\s*'([^']*)'\)$`)
+	concatPattern = regexp.MustCompile(`@concat\(([^)]*)\)`)
+	lookupPattern = regexp.MustCompile(`@lookup\(([^,]+),\s*'([^']*)',\s*'([^']*)'\)`)
 )
 
 // evaluateFunction checks if a spec value is a function and evaluates it.
 // Returns the original value if not a function.
-func (e *Engine) evaluateFunction(spec string, input interface{}, keyStack []string) interface{} {
-	// Check for @concat
-	if match := concatPattern.FindStringSubmatch(spec); match != nil {
-		return e.evaluateConcat(match[1], input, keyStack)
-	}
+// evaluateFunction checks if a spec value is a function and evaluates it.
+// Returns the original value if not a function.
+func (e *Engine) evaluateFunction(spec string, input interface{}) interface{} {
+	// Handle @concat
+	spec = concatPattern.ReplaceAllStringFunc(spec, func(match string) string {
+		sub := concatPattern.FindStringSubmatch(match)
+		if len(sub) > 1 {
+			res := e.evaluateConcat(sub[1], input)
+			if res != nil {
+				return fmt.Sprintf("%v", res)
+			}
+		}
+		return match // Keep original if evaluation fails
+	})
 
-	// Check for @lookup
-	if match := lookupPattern.FindStringSubmatch(spec); match != nil {
-		return e.evaluateLookup(match[1], match[2], match[3], input)
-	}
+	// Handle @lookup
+	spec = lookupPattern.ReplaceAllStringFunc(spec, func(match string) string {
+		sub := lookupPattern.FindStringSubmatch(match)
+		if len(sub) > 3 {
+			res := e.evaluateLookup(sub[1], sub[2], sub[3], input)
+			if res != nil {
+				return fmt.Sprintf("%v", res)
+			}
+		}
+		return match
+	})
 
-	return nil // Not a function
+	return spec
 }
 
 // evaluateConcat joins multiple fields with separators.
 // Args format: field1, ' ', field2, '-', field3
-func (e *Engine) evaluateConcat(args string, input interface{}, keyStack []string) interface{} {
+func (e *Engine) evaluateConcat(args string, input interface{}) interface{} {
 	inputMap, ok := input.(map[string]interface{})
 	if !ok {
 		return nil

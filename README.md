@@ -162,9 +162,11 @@ jmap transform -input data.json -spec spec.json -output result.json
 - **Array access**: `items[0].value`
 - **Deep nesting**: `data.level1.level2.level3.field`
 
-## Advanced Usage
+### Handling Arrays and Dynamic Keys
 
-### Handling Arrays
+#### Wildcard Matching
+
+Use `*` to iterate over all array elements or object keys:
 
 ```go
 spec := &types.TransformSpec{
@@ -172,16 +174,79 @@ spec := &types.TransformSpec{
         {
             Type: "shift",
             Spec: map[string]interface{}{
-                "permissions": map[string]interface{}{
-                    "*": map[string]interface{}{
-                        "scope": "permissions[&].accessType",
-                    },
+                "users": map[string]interface{}{
+                    "*": "people.&.profile",  // & references the current key/index
                 },
             },
         },
     },
 }
 ```
+
+#### Ancestor Lookup (`&`)
+
+Reference keys from parent levels using `&N`:
+- `&` or `&0`: Current key/index
+- `&1`: Parent key
+- `&2`: Grandparent key
+
+Example:
+```json
+{
+  "operations": [{
+    "type": "shift",
+    "spec": {
+      "departments": {
+        "*": {
+          "employees": {
+            "*": "result.&2.staff.&1"
+          }
+        }
+      }
+    }
+  }]
+}
+```
+
+#### Concatenation Function (`@concat`)
+
+Build dynamic keys by concatenating field values:
+
+```json
+{
+  "operations": [{
+    "type": "shift",
+    "spec": {
+      "users": {
+        "*": "byName.@concat(first, '_', last)"
+      }
+    }
+  }]
+}
+```
+
+Input: `{"users": [{"first": "John", "last": "Doe", "id": 1}]}`  
+Output: `{"byName": {"John_Doe": {"first": "John", "last": "Doe", "id": 1}}}`
+
+#### Lookup Function (`@lookup`)
+
+Map values conditionally based on field values:
+
+```json
+{
+  "operations": [{
+    "type": "shift",
+    "spec": {
+      "items": {
+        "*": "categorized.@lookup(type, 'premium', 'PremiumItems')"
+      }
+    }
+  }]
+}
+```
+
+If `type == 'premium'`, item is placed under `categorized.PremiumItems`.  
+Otherwise, item is placed under `categorized.{original_type_value}`.
 
 ### Default Values
 
